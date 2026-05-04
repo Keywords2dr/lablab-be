@@ -3,7 +3,9 @@ package com.keywords2dr.lablab.service.impl;
 import com.keywords2dr.lablab.dto.chemical.ChemicalRequestDTO;
 import com.keywords2dr.lablab.entity.Chemical;
 import com.keywords2dr.lablab.repository.ChemicalRepository;
+import com.keywords2dr.lablab.service.AuditLogService;
 import com.keywords2dr.lablab.service.ChemicalExcelService;
+import com.keywords2dr.lablab.service.ChemicalService;
 import com.keywords2dr.lablab.service.DataNormalizationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +28,43 @@ public class ChemicalExcelServiceImpl implements ChemicalExcelService {
 
     private final ChemicalRepository chemicalRepository;
     private final DataNormalizationService normalizationService;
+    private final ChemicalService chemicalService;
+    private final AuditLogService auditLogService;
+
+    @Override
+    public Map<String, String> processAndSaveImport(MultipartFile file) {
+        List<ChemicalRequestDTO> dtoList = this.importChemicalsFromExcel(file);
+
+        int successCount = 0;
+        int failCount = 0;
+
+        for (ChemicalRequestDTO dto : dtoList) {
+            try {
+                chemicalService.createChemical(dto);
+                successCount++;
+            } catch (Exception e) {
+                log.warn("❌ Bỏ qua hóa chất [{}] do lỗi: {}", dto.getItemCode(), e.getMessage());
+                failCount++;
+            }
+        }
+
+        Map<String, Object> importSummary = new HashMap<>();
+        importSummary.put("fileName", file.getOriginalFilename());
+        importSummary.put("totalRowsParsed", dtoList.size());
+        importSummary.put("successCount", successCount);
+        importSummary.put("failCount", failCount);
+
+        auditLogService.logAction(
+                "IMPORT_EXCEL",
+                "CHEMICAL",
+                null,
+                null,
+                importSummary
+        );
+
+        String message = String.format("Import hoàn tất! Thành công: %d. Thất bại (bỏ qua): %d", successCount, failCount);
+        return Map.of("message", message);
+    }
 
     @Override
     public List<ChemicalRequestDTO> importChemicalsFromExcel(MultipartFile file) {

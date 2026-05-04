@@ -128,9 +128,9 @@
 //            c.setFormula(data[2]);
 //            c.setSupplier(data[3]);
 //
-//            // SỬ DỤNG BỘ NÃO CHUẨN HÓA ĐỂ LỌC LUÔN DỮ LIỆU TỪ MẢNG rawData
-//            c.setPackaging(normalizationService.normalizeData(data[5]));
-//            c.setUnit(normalizationService.normalizeData(data[8]));
+//            // ĐÃ SỬA: Dùng hàm mới và truyền thêm aliasType
+//            c.setPackaging(normalizationService.normalizeAndLearn(data[5], "PACKAGING"));
+//            c.setUnit(normalizationService.normalizeAndLearn(data[8], "UNIT"));
 //
 //            c.setAmountPerPackage(amountPerPkg);
 //

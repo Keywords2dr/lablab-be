@@ -28,4 +28,6 @@ public interface ChemicalRepository extends JpaRepository<Chemical, UUID>, JpaSp
     List<Chemical> findDeletedChemicals();
 
     List<Chemical> findAllByIsDeletedFalse();
+
+    boolean existsByNameIgnoreCaseAndSupplierIgnoreCase(String name, String supplier);
 }

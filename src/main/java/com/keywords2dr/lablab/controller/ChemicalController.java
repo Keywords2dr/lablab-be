@@ -7,6 +7,10 @@ import com.keywords2dr.lablab.service.ChemicalExcelService;
 import com.keywords2dr.lablab.service.ChemicalService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -61,46 +65,39 @@ public class ChemicalController {
         return ResponseEntity.ok(list);
     }
 
+    // ĐÃ NÂNG CẤP: Nhận thêm param phân trang và sắp xếp
     @GetMapping
-    public ResponseEntity<List<ChemicalAdminResponse>> getAllForAdmin() {
-        List<ChemicalAdminResponse> list = chemicalService.getAllChemicalsForAdmin();
-        return ResponseEntity.ok(list);
-    }
-
-    @GetMapping("/search")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<List<ChemicalAdminResponse>> searchChemicals(
+    public ResponseEntity<Page<ChemicalAdminResponse>> getChemicals(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String packaging,
             @RequestParam(required = false) String supplier,
             @RequestParam(required = false) String unit,
-            @RequestParam(required = false) String category) {
+            @RequestParam(required = false) String category,
+            @RequestParam(defaultValue = "0") int page, // Trang mặc định là 0
+            @RequestParam(defaultValue = "10") int size, // Mặc định lấy 10 item 1 trang
+            @RequestParam(defaultValue = "itemCode") String sortBy, // Sắp xếp mặc định theo mã
+            @RequestParam(defaultValue = "asc") String sortDir // Hướng sắp xếp mặc định là tăng dần
+    ) {
 
-        List<ChemicalAdminResponse> result = chemicalService.filterChemicals(keyword, packaging, supplier, unit, category);
+        // 1. Tạo đối tượng Sort
+        Sort sort = sortDir.equalsIgnoreCase(Sort.Direction.ASC.name())
+                ? Sort.by(sortBy).ascending()
+                : Sort.by(sortBy).descending();
+
+        // 2. Gói trang, kích thước và cách sắp xếp vào PageRequest
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        // 3. Gọi Service và truyền pageable vào
+        Page<ChemicalAdminResponse> result = chemicalService.filterChemicals(keyword, packaging, supplier, unit, category, pageable);
+
         return ResponseEntity.ok(result);
     }
 
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<Map<String, String>> importChemicals(@RequestParam("file") MultipartFile file) {
-        List<ChemicalRequestDTO> dtoList = chemicalExcelService.importChemicalsFromExcel(file);
-
-        int successCount = 0;
-        int failCount = 0;
-
-        // Vòng lặp lưu từng hóa chất vào Database
-        for (ChemicalRequestDTO dto : dtoList) {
-            try {
-                chemicalService.createChemical(dto);
-                successCount++;
-            } catch (Exception e) {
-                // Nếu dòng này lỗi (Trùng mã, thiếu trường...), in ra log và tăng biến failCount
-                System.err.println("❌ Bỏ qua hóa chất [" + dto.getItemCode() + "] do lỗi: " + e.getMessage());
-                failCount++;
-            }
-        }
-
-        String message = String.format("Import hoàn tất! Thành công: %d. Thất bại (bỏ qua): %d", successCount, failCount);
-        return ResponseEntity.ok(Map.of("message", message));
+        Map<String, String> result = chemicalExcelService.processAndSaveImport(file);
+        return ResponseEntity.ok(result);
     }
 
     @GetMapping("/export")

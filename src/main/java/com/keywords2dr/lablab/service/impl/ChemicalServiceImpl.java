@@ -9,9 +9,12 @@ import com.keywords2dr.lablab.repository.ChemicalRepository;
 import com.keywords2dr.lablab.repository.ItemRepository;
 import com.keywords2dr.lablab.repository.RoomInventoryRepository;
 import com.keywords2dr.lablab.repository.specification.ChemicalSpecification;
+import com.keywords2dr.lablab.service.AuditLogService;
 import com.keywords2dr.lablab.service.ChemicalService;
 import com.keywords2dr.lablab.service.DataNormalizationService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,16 +33,29 @@ public class ChemicalServiceImpl implements ChemicalService {
     private final RoomInventoryRepository roomInventoryRepository;
     private final ChemicalMapper chemicalMapper;
     private final DataNormalizationService normalizationService;
+    private final AuditLogService auditLogService;
 
     @Override
     @Transactional
     public Chemical createChemical(ChemicalRequestDTO request) {
         validateItemCodeUniqueness(request.getItemCode());
 
+        if (chemicalRepository.existsByNameIgnoreCaseAndSupplierIgnoreCase(request.getName(), request.getSupplier())) {
+            throw new RuntimeException(
+                    String.format("Hóa chất [%s] của nhà cung cấp [%s] đã tồn tại trong hệ thống!",
+                            request.getName(), request.getSupplier())
+            );
+        }
+
         normalizeChemicalRequest(request);
 
         Chemical chemical = chemicalMapper.toEntity(request);
-        return chemicalRepository.save(chemical);
+        Chemical savedChemical = chemicalRepository.save(chemical);
+
+        ChemicalAdminResponse newState = chemicalMapper.toAdminResponse(savedChemical);
+        auditLogService.logAction("CREATE", "CHEMICAL", savedChemical.getItemId(), null, newState);
+
+        return savedChemical;
     }
 
     @Override
@@ -60,9 +76,15 @@ public class ChemicalServiceImpl implements ChemicalService {
 
         normalizeChemicalRequest(request);
 
-        chemicalMapper.updateEntityFromDto(request, chemical);
+        ChemicalAdminResponse oldState = chemicalMapper.toAdminResponse(chemical);
 
-        return chemicalRepository.save(chemical);
+        chemicalMapper.updateEntityFromDto(request, chemical);
+        Chemical updatedChemical = chemicalRepository.save(chemical);
+
+        ChemicalAdminResponse newState = chemicalMapper.toAdminResponse(updatedChemical);
+        auditLogService.logAction("UPDATE", "CHEMICAL", updatedChemical.getItemId(), oldState, newState);
+
+        return updatedChemical;
     }
 
     @Override
@@ -71,7 +93,10 @@ public class ChemicalServiceImpl implements ChemicalService {
         Chemical chemical = findChemicalById(id);
         List<RoomInventory> activeInventories = getInventoriesWithStock(id);
 
+        ChemicalAdminResponse oldState = chemicalMapper.toAdminResponse(chemical);
+
         chemicalRepository.softDeleteById(id);
+        auditLogService.logAction("DELETE", "CHEMICAL", id, oldState, null);
 
         if (activeInventories.isEmpty()) {
             return "Đã xóa (ẩn) hóa chất thành công.";
@@ -87,15 +112,10 @@ public class ChemicalServiceImpl implements ChemicalService {
         if (rowsAffected == 0) {
             throw new RuntimeException("Không tìm thấy hóa chất bị ẩn để khôi phục (ID có thể sai)!");
         }
-    }
 
-    @Override
-    @Transactional(readOnly = true)
-    public List<ChemicalAdminResponse> getAllChemicalsForAdmin() {
-        List<Chemical> chemicals = chemicalRepository.findAll();
-        return chemicals.stream()
-                .map(chemicalMapper::toAdminResponse)
-                .collect(Collectors.toList());
+        Chemical restoredChemical = findChemicalById(id);
+        ChemicalAdminResponse newState = chemicalMapper.toAdminResponse(restoredChemical);
+        auditLogService.logAction("RESTORE", "CHEMICAL", id, null, newState);
     }
 
     @Override
@@ -110,7 +130,7 @@ public class ChemicalServiceImpl implements ChemicalService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<ChemicalAdminResponse> filterChemicals(String keyword, String packaging, String supplier, String unit, String category) {
+    public Page<ChemicalAdminResponse> filterChemicals(String keyword, String packaging, String supplier, String unit, String category, Pageable pageable) {
 
         String k = cleanSearchParam(keyword);
         String p = cleanSearchParam(packaging);
@@ -120,11 +140,9 @@ public class ChemicalServiceImpl implements ChemicalService {
 
         Specification<Chemical> spec = ChemicalSpecification.filter(k, p, s, u, c);
 
-        List<Chemical> chemicals = chemicalRepository.findAll(spec);
-
-        return chemicals.stream()
-                .map(chemicalMapper::toAdminResponse)
-                .collect(Collectors.toList());
+        // Truyền pageable vào findAll để DB chỉ lấy đúng số dòng cần thiết
+        Page<Chemical> chemicalPage = chemicalRepository.findAll(spec, pageable);
+        return chemicalPage.map(chemicalMapper::toAdminResponse);
     }
 
     // CÁC HÀM PHỤ TRỢ (HELPER METHODS)
