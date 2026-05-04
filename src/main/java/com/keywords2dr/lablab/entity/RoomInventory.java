@@ -2,21 +2,16 @@ package com.keywords2dr.lablab.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.GenericGenerator;
 import java.util.UUID;
 import java.math.BigDecimal;
 
 @Entity
 @Table(name = "room_inventory")
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class RoomInventory {
 
     @Id
-    @GeneratedValue(generator = "UUID")
-    @GenericGenerator(name = "UUID", strategy = "org.hibernate.id.UUIDGenerator")
+    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID inventoryId;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -28,13 +23,13 @@ public class RoomInventory {
     private Item item;
 
     @Column(name = "package_count")
-    private Integer packageCount; // Số lượng chai/lọ
+    private Integer packageCount;
 
     @Column(name = "total_quantity", precision = 38, scale = 2)
-    private BigDecimal totalQuantity; // Tổng khối lượng thực tế
+    private BigDecimal totalQuantity;
 
     @Column(name = "locked_quantity", precision = 38, scale = 2)
-    private BigDecimal lockedQuantity; // Lượng đang chờ duyệt mượn
+    private BigDecimal lockedQuantity;
 
     @Column(length = 255)
     private String note;

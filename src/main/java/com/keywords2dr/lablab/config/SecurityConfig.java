@@ -61,7 +61,7 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(List.of("http://localhost:5173"));
 
         // Cho phép các phương thức HTTP cần thiết
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
 
         // Cho phép gửi các header (quan trọng là Authorization chứa Token)
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept"));
