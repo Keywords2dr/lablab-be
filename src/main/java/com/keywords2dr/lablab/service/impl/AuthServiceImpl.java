@@ -10,8 +10,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.security.SecureRandom;
+import java.time.Instant;
 import java.util.Map;
-import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
@@ -23,7 +24,13 @@ public class AuthServiceImpl implements AuthService {
     private final JwtUtil jwtUtil;
     private final EmailService emailService;
 
-    private final Map<String, String> otpStorage = new ConcurrentHashMap<>();
+    private record OtpEntry(String code, Instant expiresAt) {
+        boolean isExpired() { return Instant.now().isAfter(expiresAt); }
+    }
+
+    private final Map<String, OtpEntry> otpStorage = new ConcurrentHashMap<>();
+
+    private final SecureRandom secureRandom = new SecureRandom();
 
     @Override
     public LoginResponse login(LoginRequest request) {
@@ -52,17 +59,15 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new RuntimeException("Email chưa được đăng ký trong hệ thống!"));
 
-        String code = String.format("%06d", new Random().nextInt(999999));
-        otpStorage.put(request.getEmail(), code);
+        String code = String.format("%06d", secureRandom.nextInt(1_000_000));
+
+        otpStorage.put(request.getEmail(), new OtpEntry(code, Instant.now().plusSeconds(300)));
         emailService.sendOtp(request.getEmail(), code);
     }
 
     @Override
     public void verifyResetCode(VerifyResetCodeRequest request) {
-        String savedCode = otpStorage.get(request.getEmail());
-        if (savedCode == null || !savedCode.equals(request.getCode())) {
-            throw new RuntimeException("Mã xác thực không đúng hoặc đã hết hạn!");
-        }
+        validateOtp(request.getEmail(), request.getCode());
     }
 
     @Override
@@ -71,10 +76,7 @@ public class AuthServiceImpl implements AuthService {
             throw new RuntimeException("Mật khẩu xác nhận không trùng khớp!");
         }
 
-        String savedCode = otpStorage.get(request.getEmail());
-        if (savedCode == null || !savedCode.equals(request.getCode())) {
-            throw new RuntimeException("Mã xác thực không đúng hoặc đã hết hạn!");
-        }
+        validateOtp(request.getEmail(), request.getCode());
 
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new RuntimeException("Lỗi hệ thống: Không tìm thấy User!"));
@@ -82,5 +84,17 @@ public class AuthServiceImpl implements AuthService {
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
         otpStorage.remove(request.getEmail());
+    }
+
+    // Kiểm tra OTP hợp lệ và chưa hết hạn — dùng chung cho verify + reset
+    private void validateOtp(String email, String code) {
+        OtpEntry entry = otpStorage.get(email);
+        if (entry == null || entry.isExpired()) {
+            otpStorage.remove(email); // dọn entry hết hạn
+            throw new RuntimeException("Mã xác thực không đúng hoặc đã hết hạn!");
+        }
+        if (!entry.code().equals(code)) {
+            throw new RuntimeException("Mã xác thực không đúng hoặc đã hết hạn!");
+        }
     }
 }

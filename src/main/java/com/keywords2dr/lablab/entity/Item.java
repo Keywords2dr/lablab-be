@@ -33,5 +33,5 @@ public class Item {
     private String unit; // Đơn vị gốc (g, ml, cái...)
 
     @Column(name = "is_deleted", nullable = false)
-    private boolean isDeleted = false; // Mặc định là false (chưa xóa)
+    private boolean isDeleted = false;
 }

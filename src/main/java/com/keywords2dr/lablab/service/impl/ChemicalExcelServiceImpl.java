@@ -32,11 +32,11 @@ public class ChemicalExcelServiceImpl implements ChemicalExcelService {
     private final AuditLogService auditLogService;
 
     @Override
-    public Map<String, String> processAndSaveImport(MultipartFile file) {
-        List<ChemicalRequestDTO> dtoList = this.importChemicalsFromExcel(file);
+    public Map<String, Object> processAndSaveImport(MultipartFile file) {
+        List<ChemicalRequestDTO> dtoList = this.parseChemicalsFromExcel(file);
 
         int successCount = 0;
-        int failCount = 0;
+        List<Map<String, String>> failures = new ArrayList<>();
 
         for (ChemicalRequestDTO dto : dtoList) {
             try {
@@ -44,30 +44,34 @@ public class ChemicalExcelServiceImpl implements ChemicalExcelService {
                 successCount++;
             } catch (Exception e) {
                 log.warn("❌ Bỏ qua hóa chất [{}] do lỗi: {}", dto.getItemCode(), e.getMessage());
-                failCount++;
+                failures.add(Map.of(
+                        "itemCode", dto.getItemCode() != null ? dto.getItemCode() : "(không có mã)",
+                        "name",     dto.getName()     != null ? dto.getName()     : "(không có tên)",
+                        "reason",   e.getMessage()
+                ));
             }
         }
 
         Map<String, Object> importSummary = new HashMap<>();
-        importSummary.put("fileName", file.getOriginalFilename());
+        importSummary.put("fileName",        file.getOriginalFilename());
         importSummary.put("totalRowsParsed", dtoList.size());
-        importSummary.put("successCount", successCount);
-        importSummary.put("failCount", failCount);
+        importSummary.put("successCount",    successCount);
+        importSummary.put("failCount",       failures.size());
 
-        auditLogService.logAction(
-                "IMPORT_EXCEL",
-                "CHEMICAL",
-                null,
-                null,
-                importSummary
-        );
+        auditLogService.logAction("IMPORT_EXCEL", "CHEMICAL", null, null, importSummary);
 
-        String message = String.format("Import hoàn tất! Thành công: %d. Thất bại (bỏ qua): %d", successCount, failCount);
-        return Map.of("message", message);
+        Map<String, Object> response = new HashMap<>();
+        response.put("message",      String.format("Import hoàn tất! Thành công: %d. Thất bại (bỏ qua): %d", successCount, failures.size()));
+        response.put("successCount", successCount);
+        response.put("failCount",    failures.size());
+        if (!failures.isEmpty()) {
+            response.put("failures", failures);
+        }
+        return response;
     }
 
     @Override
-    public List<ChemicalRequestDTO> importChemicalsFromExcel(MultipartFile file) {
+    public List<ChemicalRequestDTO> parseChemicalsFromExcel(MultipartFile file) {
         if (!isExcelFormat(file)) throw new RuntimeException("Vui lòng tải lên file Excel (.xlsx)!");
 
         try (InputStream is = file.getInputStream(); Workbook workbook = new XSSFWorkbook(is)) {
@@ -135,32 +139,14 @@ public class ChemicalExcelServiceImpl implements ChemicalExcelService {
         try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Sheet sheet = workbook.createSheet("Kho_Hoa_Chat");
 
-            CellStyle headerStyle = workbook.createCellStyle();
-            headerStyle.setFillForegroundColor(IndexedColors.DARK_BLUE.getIndex());
-            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
-            headerStyle.setBorderBottom(BorderStyle.THIN);
-            headerStyle.setBorderTop(BorderStyle.THIN);
-            headerStyle.setBorderRight(BorderStyle.THIN);
-            headerStyle.setBorderLeft(BorderStyle.THIN);
-            headerStyle.setAlignment(HorizontalAlignment.CENTER);
-            headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+            CellStyle headerStyle = createHeaderStyle(workbook);
+            CellStyle dataStyle   = createDataStyle(workbook);
 
-            Font headerFont = workbook.createFont();
-            headerFont.setColor(IndexedColors.WHITE.getIndex());
-            headerFont.setBold(true);
-            headerStyle.setFont(headerFont);
-
-            CellStyle dataStyle = workbook.createCellStyle();
-            dataStyle.setBorderBottom(BorderStyle.THIN);
-            dataStyle.setBorderTop(BorderStyle.THIN);
-            dataStyle.setBorderRight(BorderStyle.THIN);
-            dataStyle.setBorderLeft(BorderStyle.THIN);
-
-            String[] headers = {"STT", "Mã Hóa Chất", "Tên Hóa Chất", "Công Thức", "Đơn Vị Tính", "Quy Cách", "Dung Tích/Gói", "Nhà Cung Cấp"};
+            String[] headers = {"STT", "Mã Hóa Chất", "Tên Hóa Chất", "Công Thức",
+                    "Đơn Vị Tính", "Quy Cách", "Dung Tích/Gói", "Nhà Cung Cấp"};
 
             Row headerRow = sheet.createRow(0);
             headerRow.setHeightInPoints(25);
-
             for (int col = 0; col < headers.length; col++) {
                 Cell cell = headerRow.createCell(col);
                 cell.setCellValue(headers[col]);
@@ -170,7 +156,6 @@ public class ChemicalExcelServiceImpl implements ChemicalExcelService {
             int rowIdx = 1;
             for (Chemical c : chemicals) {
                 Row row = sheet.createRow(rowIdx);
-
                 createCell(row, 0, String.valueOf(rowIdx), dataStyle);
                 createCell(row, 1, c.getItemCode(), dataStyle);
                 createCell(row, 2, c.getName(), dataStyle);
@@ -191,7 +176,6 @@ public class ChemicalExcelServiceImpl implements ChemicalExcelService {
             }
 
             sheet.setAutoFilter(new org.apache.poi.ss.util.CellRangeAddress(0, rowIdx - 1, 0, headers.length - 1));
-
             for (int i = 0; i < headers.length; i++) {
                 sheet.autoSizeColumn(i);
             }
@@ -205,6 +189,34 @@ public class ChemicalExcelServiceImpl implements ChemicalExcelService {
     }
 
     // --- CÁC HÀM HỖ TRỢ ---
+
+    private CellStyle createHeaderStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        style.setFillForegroundColor(IndexedColors.DARK_BLUE.getIndex());
+        style.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        style.setAlignment(HorizontalAlignment.CENTER);
+        style.setVerticalAlignment(VerticalAlignment.CENTER);
+
+        Font font = workbook.createFont();
+        font.setColor(IndexedColors.WHITE.getIndex());
+        font.setBold(true);
+        style.setFont(font);
+
+        return style;
+    }
+
+    private CellStyle createDataStyle(Workbook workbook) {
+        CellStyle style = workbook.createCellStyle();
+        style.setBorderBottom(BorderStyle.THIN);
+        style.setBorderTop(BorderStyle.THIN);
+        style.setBorderRight(BorderStyle.THIN);
+        style.setBorderLeft(BorderStyle.THIN);
+        return style;
+    }
     private Sheet findDataSheet(Workbook workbook) {
         for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
             Sheet sheet = workbook.getSheetAt(i);
@@ -259,7 +271,11 @@ public class ChemicalExcelServiceImpl implements ChemicalExcelService {
     }
 
     private boolean isExcelFormat(MultipartFile file) {
-        return file.getContentType() != null && file.getContentType().contains("spreadsheetml");
+        String contentType = file.getContentType();
+        String filename    = file.getOriginalFilename();
+        boolean validType  = contentType != null && contentType.contains("spreadsheetml");
+        boolean validExt   = filename != null && filename.toLowerCase().endsWith(".xlsx");
+        return validType || validExt;
     }
 
     private String getCellValueAsString(Cell cell) {

@@ -2,6 +2,8 @@ package com.keywords2dr.lablab.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -30,11 +32,8 @@ public class Notification {
     @Column(name = "is_read", nullable = false)
     private boolean isRead = false;
 
+
+    @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
-
-    @PrePersist
-    public void prePersist() {
-        this.createdAt = LocalDateTime.now();
-    }
 }

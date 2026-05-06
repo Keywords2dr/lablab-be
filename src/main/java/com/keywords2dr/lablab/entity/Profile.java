@@ -7,7 +7,10 @@ import lombok.*;
 import java.util.UUID;
 
 @Entity
-@Table(name = "profiles")
+@Table(name = "profiles", uniqueConstraints = {
+        @UniqueConstraint(columnNames = "email",        name = "uk_profiles_email"),
+        @UniqueConstraint(columnNames = "phone_number", name = "uk_profiles_phone_number")
+})
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class Profile {
     @Id
@@ -21,7 +24,7 @@ public class Profile {
     @Column(length = 100)
     private String fullName;
 
-    @Column(length = 10)
+    @Column(name = "phone_number", length = 10)
     private String phoneNumber;
 
     @NotBlank(message = "Email không được để trống!")

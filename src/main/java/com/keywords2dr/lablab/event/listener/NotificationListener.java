@@ -7,9 +7,12 @@ import com.keywords2dr.lablab.repository.NotificationRepository;
 import com.keywords2dr.lablab.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 @Component
 @RequiredArgsConstructor
@@ -20,14 +23,14 @@ public class NotificationListener {
     private final UserRepository userRepository;
 
     @Async
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void handleNotificationEvent(NotificationEvent event) {
         try {
-            User user = userRepository.findById(event.getUserId()).orElse(null);
-            if (user == null) return;
+            User userRef = userRepository.getReferenceById(event.getUserId());
 
             Notification notification = Notification.builder()
-                    .user(user)
+                    .user(userRef)
                     .title(event.getTitle())
                     .message(event.getMessage())
                     .type(event.getType())
@@ -35,10 +38,10 @@ public class NotificationListener {
                     .build();
 
             notificationRepository.save(notification);
-            log.info("Đã tạo thông báo cho User: {}", user.getUsername());
+            log.info("Đã tạo thông báo cho User ID: {}", event.getUserId());
 
         } catch (Exception e) {
-            log.error("Lỗi khi tạo thông báo: {}", e.getMessage());
+            log.error("Lỗi khi tạo thông báo cho User ID [{}]: {}", event.getUserId(), e.getMessage());
         }
     }
 }

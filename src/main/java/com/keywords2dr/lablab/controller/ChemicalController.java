@@ -65,7 +65,6 @@ public class ChemicalController {
         return ResponseEntity.ok(list);
     }
 
-    // ĐÃ NÂNG CẤP: Nhận thêm param phân trang và sắp xếp
     @GetMapping
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Page<ChemicalAdminResponse>> getChemicals(
@@ -94,10 +93,9 @@ public class ChemicalController {
         return ResponseEntity.ok(result);
     }
 
-    @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<Map<String, String>> importChemicals(@RequestParam("file") MultipartFile file) {
-        Map<String, String> result = chemicalExcelService.processAndSaveImport(file);
-        return ResponseEntity.ok(result);
+    @PostMapping("/import")
+    public ResponseEntity<Map<String, Object>> importChemicals(@RequestParam("file") MultipartFile file) {
+        return ResponseEntity.ok(chemicalExcelService.processAndSaveImport(file));
     }
 
     @GetMapping("/export")

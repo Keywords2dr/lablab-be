@@ -45,6 +45,16 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(currentUserId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy dữ liệu người dùng!"));
 
+        if (request.getEmail() != null
+                && userRepository.existsByEmailAndUserIdNot(request.getEmail(), currentUserId)) {
+            throw new RuntimeException("Email [" + request.getEmail() + "] đã được sử dụng bởi tài khoản khác!");
+        }
+
+        if (request.getPhoneNumber() != null
+                && userRepository.existsByPhoneNumberAndUserIdNot(request.getPhoneNumber(), currentUserId)) {
+            throw new RuntimeException("Số điện thoại [" + request.getPhoneNumber() + "] đã được sử dụng bởi tài khoản khác!");
+        }
+
         userMapper.updateProfileFromRequest(request, user.getProfile());
         userRepository.save(user);
 

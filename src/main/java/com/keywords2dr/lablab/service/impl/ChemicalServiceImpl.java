@@ -18,6 +18,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -125,7 +126,7 @@ public class ChemicalServiceImpl implements ChemicalService {
 
         return deletedChemicals.stream()
                 .map(chemicalMapper::toAdminResponse)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -140,7 +141,6 @@ public class ChemicalServiceImpl implements ChemicalService {
 
         Specification<Chemical> spec = ChemicalSpecification.filter(k, p, s, u, c);
 
-        // Truyền pageable vào findAll để DB chỉ lấy đúng số dòng cần thiết
         Page<Chemical> chemicalPage = chemicalRepository.findAll(spec, pageable);
         return chemicalPage.map(chemicalMapper::toAdminResponse);
     }
@@ -152,7 +152,7 @@ public class ChemicalServiceImpl implements ChemicalService {
     }
 
     private String cleanSearchParam(String param) {
-        return (param != null && !param.trim().isEmpty()) ? param.trim() : null;
+        return StringUtils.hasText(param) ? param.trim() : null;
     }
 
     private void validateItemCodeUniqueness(String itemCode) {
@@ -171,15 +171,12 @@ public class ChemicalServiceImpl implements ChemicalService {
     }
 
     private String buildRecallInstruction(List<RoomInventory> inventories, String unit) {
-        StringBuilder sb = new StringBuilder("Đã ẩn hóa chất khỏi hệ thống. ");
-        sb.append("LƯU Ý: Bạn cần thực hiện thu hồi thực tế tại các phòng sau: ");
-
-        for (RoomInventory inv : inventories) {
-            sb.append(String.format("[%s: %s %s], ",
-                    inv.getRoom().getRoomName(),
-                    inv.getTotalQuantity(),
-                    unit));
-        }
-        return sb.substring(0, sb.length() - 2);
+        String rooms = inventories.stream()
+                .map(inv -> String.format("[%s: %s %s]",
+                        inv.getRoom().getRoomName(),
+                        inv.getTotalQuantity(),
+                        unit))
+                .collect(Collectors.joining(", "));
+        return "Đã ẩn hóa chất khỏi hệ thống. LƯU Ý: Bạn cần thực hiện thu hồi thực tế tại các phòng sau: " + rooms;
     }
 }
