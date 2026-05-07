@@ -8,7 +8,7 @@ import com.keywords2dr.lablab.dto.inventory.RoomInventoryResponseDTO;
 import java.util.List;
 import java.util.UUID;
 
-public interface InventoryService {
+public interface RoomInventoryService {
     List<GlobalInventoryResponse> getGlobalChemicalInventory();
 
     void allocateItems(AllocateRequestDTO request);

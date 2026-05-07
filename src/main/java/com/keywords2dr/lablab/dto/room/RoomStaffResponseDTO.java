@@ -4,7 +4,7 @@ import lombok.Data;
 import java.util.UUID;
 
 @Data
-public class RoomManagerResponseDTO {
+public class RoomStaffResponseDTO {
     private UUID id;
     private UUID roomId;
     private UUID userId;

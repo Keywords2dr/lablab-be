@@ -4,7 +4,7 @@ import com.keywords2dr.lablab.dto.chemical.GlobalInventoryResponse;
 import com.keywords2dr.lablab.dto.inventory.AllocateRequestDTO;
 import com.keywords2dr.lablab.dto.inventory.RevokeRequestDTO;
 import com.keywords2dr.lablab.dto.inventory.RoomInventoryResponseDTO;
-import com.keywords2dr.lablab.service.InventoryService;
+import com.keywords2dr.lablab.service.RoomInventoryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -19,30 +19,30 @@ import java.util.UUID;
 @RequestMapping("/api/inventory")
 @PreAuthorize("hasRole('ADMIN')")
 @RequiredArgsConstructor
-public class InventoryController {
+public class RoomInventoryController {
 
-    private final InventoryService inventoryService;
+    private final RoomInventoryService roomInventoryService;
 
     @GetMapping("/chemicals/global")
     public ResponseEntity<List<GlobalInventoryResponse>> getGlobalChemicalInventory() {
-        return ResponseEntity.ok(inventoryService.getGlobalChemicalInventory());
+        return ResponseEntity.ok(roomInventoryService.getGlobalChemicalInventory());
     }
 
     @PostMapping("/allocate")
     public ResponseEntity<Map<String, String>> allocateItems(@Valid @RequestBody AllocateRequestDTO request) {
-        inventoryService.allocateItems(request);
+        roomInventoryService.allocateItems(request);
         return ResponseEntity.ok(Map.of("message", "Đã phân bổ vật tư thành công vào các phòng Lab."));
     }
 
     @GetMapping("/rooms/{roomId}")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<RoomInventoryResponseDTO>> getInventoryByRoom(@PathVariable UUID roomId) {
-        return ResponseEntity.ok(inventoryService.getInventoryByRoom(roomId));
+        return ResponseEntity.ok(roomInventoryService.getInventoryByRoom(roomId));
     }
 
     @PostMapping("/revoke")
     public ResponseEntity<Map<String, String>> revokeItems(@Valid @RequestBody RevokeRequestDTO request) {
-        inventoryService.revokeItems(request);
+        roomInventoryService.revokeItems(request);
         return ResponseEntity.ok(Map.of("message", "Đã thu hồi vật tư khỏi phòng Lab thành công."));
     }
 }

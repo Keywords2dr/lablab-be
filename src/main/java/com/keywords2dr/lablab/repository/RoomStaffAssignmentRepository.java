@@ -1,6 +1,6 @@
 package com.keywords2dr.lablab.repository;
 
-import com.keywords2dr.lablab.entity.RoomManager;
+import com.keywords2dr.lablab.entity.RoomStaffAssignment;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -9,11 +9,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface RoomManagerRepository extends JpaRepository<RoomManager, UUID> {
+public interface RoomStaffAssignmentRepository extends JpaRepository<RoomStaffAssignment, UUID> {
 
-    List<RoomManager> findAllByRoom_RoomId(UUID roomId);
+    List<RoomStaffAssignment> findAllByRoom_RoomId(UUID roomId);
 
     boolean existsByRoom_RoomIdAndUser_UserId(UUID roomId, UUID userId);
 
-    Optional<RoomManager> findByRoom_RoomIdAndUser_UserId(UUID roomId, UUID userId);
+    Optional<RoomStaffAssignment> findByRoom_RoomIdAndUser_UserId(UUID roomId, UUID userId);
 }

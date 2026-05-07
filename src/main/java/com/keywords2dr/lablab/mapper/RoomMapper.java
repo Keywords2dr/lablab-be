@@ -12,14 +12,14 @@ public interface RoomMapper {
 
     @Mapping(target = "roomId", ignore = true)
     @Mapping(target = "inventories", ignore = true)
-    @Mapping(target = "managers", ignore = true)
+    @Mapping(target = "staffAssignments", ignore = true)
     Room toEntity(RoomRequestDTO request);
 
     RoomResponseDTO toResponse(Room room);
 
     @Mapping(target = "roomId", ignore = true)
     @Mapping(target = "inventories", ignore = true)
-    @Mapping(target = "managers", ignore = true)
+    @Mapping(target = "staffAssignments", ignore = true)
     @Mapping(target = "isActive", ignore = true)
     void updateEntityFromDto(RoomRequestDTO dto, @MappingTarget Room entity);
 }

@@ -5,7 +5,7 @@ import lombok.Data;
 import java.util.UUID;
 
 @Data
-public class RoomManagerRequestDTO {
+public class AssignStaffRequestDTO {
     @NotNull(message = "ID của Người dùng không được để trống!")
     private UUID userId;
 }

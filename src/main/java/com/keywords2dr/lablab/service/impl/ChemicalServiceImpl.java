@@ -21,8 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -36,47 +35,38 @@ public class ChemicalServiceImpl implements ChemicalService {
     private final DataNormalizationService normalizationService;
     private final AuditLogService auditLogService;
 
+    // PUBLIC CORE METHODS (CRUD)
     @Override
     @Transactional
-    public Chemical createChemical(ChemicalRequestDTO request) {
+    public ChemicalAdminResponse createChemical(ChemicalRequestDTO request) {
         validateItemCodeUniqueness(request.getItemCode());
-
         if (chemicalRepository.existsByNameIgnoreCaseAndSupplierIgnoreCase(request.getName(), request.getSupplier())) {
-            throw new RuntimeException(
-                    String.format("Hóa chất [%s] của nhà cung cấp [%s] đã tồn tại trong hệ thống!",
-                            request.getName(), request.getSupplier())
-            );
+            throw new RuntimeException(String.format("Hóa chất [%s] của nhà cung cấp [%s] đã tồn tại trong hệ thống!", request.getName(), request.getSupplier()));
         }
 
         normalizeChemicalRequest(request);
-
         Chemical chemical = chemicalMapper.toEntity(request);
         Chemical savedChemical = chemicalRepository.save(chemical);
 
-        ChemicalAdminResponse newState = chemicalMapper.toAdminResponse(savedChemical);
-        auditLogService.logAction("CREATE", "CHEMICAL", savedChemical.getItemId(), null, newState);
-
-        return savedChemical;
+        ChemicalAdminResponse responseDTO = chemicalMapper.toAdminResponse(savedChemical);
+        auditLogService.logAction("CREATE", "CHEMICAL", savedChemical.getItemId(), null, responseDTO);
+        return responseDTO;
     }
 
     @Override
     @Transactional
-    public Chemical updateChemical(UUID id, ChemicalRequestDTO request) {
+    public ChemicalAdminResponse updateChemical(UUID id, ChemicalRequestDTO request) {
         Chemical chemical = findChemicalById(id);
-
         if (!chemical.getItemCode().equals(request.getItemCode())) {
             validateItemCodeUniqueness(request.getItemCode());
         }
-
         if (!chemical.getUnit().equals(request.getUnit())) {
-            boolean hasStock = roomInventoryRepository.existsByItem_ItemIdAndTotalQuantityGreaterThan(id, BigDecimal.ZERO);
-            if (hasStock) {
+            if (roomInventoryRepository.existsByItem_ItemIdAndTotalQuantityGreaterThan(id, BigDecimal.ZERO)) {
                 throw new RuntimeException("Không thể đổi Đơn vị tính! Hóa chất này đang còn tồn kho thực tế. Vui lòng thu hồi về 0 trước khi đổi.");
             }
         }
 
         normalizeChemicalRequest(request);
-
         ChemicalAdminResponse oldState = chemicalMapper.toAdminResponse(chemical);
 
         chemicalMapper.updateEntityFromDto(request, chemical);
@@ -84,8 +74,7 @@ public class ChemicalServiceImpl implements ChemicalService {
 
         ChemicalAdminResponse newState = chemicalMapper.toAdminResponse(updatedChemical);
         auditLogService.logAction("UPDATE", "CHEMICAL", updatedChemical.getItemId(), oldState, newState);
-
-        return updatedChemical;
+        return newState;
     }
 
     @Override
@@ -93,7 +82,6 @@ public class ChemicalServiceImpl implements ChemicalService {
     public String deleteChemical(UUID id) {
         Chemical chemical = findChemicalById(id);
         List<RoomInventory> activeInventories = getInventoriesWithStock(id);
-
         ChemicalAdminResponse oldState = chemicalMapper.toAdminResponse(chemical);
 
         chemicalRepository.softDeleteById(id);
@@ -108,44 +96,87 @@ public class ChemicalServiceImpl implements ChemicalService {
     @Override
     @Transactional
     public void restoreChemical(UUID id) {
-        int rowsAffected = chemicalRepository.restoreById(id);
-
-        if (rowsAffected == 0) {
-            throw new RuntimeException("Không tìm thấy hóa chất bị ẩn để khôi phục (ID có thể sai)!");
+        if (chemicalRepository.restoreById(id) == 0) {
+            throw new RuntimeException("Không tìm thấy hóa chất bị ẩn để khôi phục!");
         }
-
         Chemical restoredChemical = findChemicalById(id);
-        ChemicalAdminResponse newState = chemicalMapper.toAdminResponse(restoredChemical);
-        auditLogService.logAction("RESTORE", "CHEMICAL", id, null, newState);
+        auditLogService.logAction("RESTORE", "CHEMICAL", id, null, chemicalMapper.toAdminResponse(restoredChemical));
+    }
+
+    // PUBLIC FEATURE METHODS (GET & BATCH)
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ChemicalAdminResponse> filterChemicals(String keyword, String packaging, String supplier, String unit, String category, Pageable pageable) {
+        Specification<Chemical> spec = ChemicalSpecification.filter(
+                cleanSearchParam(keyword), cleanSearchParam(packaging), cleanSearchParam(supplier), cleanSearchParam(unit), cleanSearchParam(category)
+        );
+        return chemicalRepository.findAll(spec, pageable).map(chemicalMapper::toAdminResponse);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ChemicalAdminResponse> getDeletedChemicalsForAdmin() {
-        List<Chemical> deletedChemicals = chemicalRepository.findDeletedChemicals();
-
-        return deletedChemicals.stream()
-                .map(chemicalMapper::toAdminResponse)
-                .toList();
+        return chemicalRepository.findDeletedChemicals().stream().map(chemicalMapper::toAdminResponse).toList();
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ChemicalAdminResponse> filterChemicals(String keyword, String packaging, String supplier, String unit, String category, Pageable pageable) {
+    public Map<String, List<String>> getChemicalFormOptions() {
+        Map<String, List<String>> options = new HashMap<>();
 
-        String k = cleanSearchParam(keyword);
-        String p = cleanSearchParam(packaging);
-        String s = cleanSearchParam(supplier);
-        String u = cleanSearchParam(unit);
-        String c = cleanSearchParam(category);
+        options.put("packagings", chemicalRepository.findDistinctPackagings());
+        options.put("units", chemicalRepository.findDistinctUnits());
 
-        Specification<Chemical> spec = ChemicalSpecification.filter(k, p, s, u, c);
+        List<String> rawSuppliers = chemicalRepository.findDistinctSuppliers();
 
-        Page<Chemical> chemicalPage = chemicalRepository.findAll(spec, pageable);
-        return chemicalPage.map(chemicalMapper::toAdminResponse);
+        List<String> processedSuppliers = rawSuppliers.stream()
+                .filter(StringUtils::hasText)
+                .flatMap(s -> Arrays.stream(s.split("[,/\\-]")))
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .sorted()
+                .toList();
+
+        options.put("suppliers", processedSuppliers);
+
+        return options;
     }
 
-    // CÁC HÀM PHỤ TRỢ (HELPER METHODS)
+    @Override
+    public Map<String, Object> processBatchImport(List<ChemicalRequestDTO> dtoList, String fileName) {
+        int successCount = 0;
+        List<Map<String, String>> failures = new ArrayList<>();
+
+        for (ChemicalRequestDTO dto : dtoList) {
+            try {
+                this.createChemical(dto);
+                successCount++;
+            } catch (Exception e) {
+                failures.add(Map.of(
+                        "itemCode", dto.getItemCode() != null ? dto.getItemCode() : "(không có mã)",
+                        "name", dto.getName() != null ? dto.getName() : "(không có tên)",
+                        "reason", e.getMessage()
+                ));
+            }
+        }
+
+        Map<String, Object> summary = new HashMap<>();
+        summary.put("fileName", fileName);
+        summary.put("totalRowsParsed", dtoList.size());
+        summary.put("successCount", successCount);
+        summary.put("failCount", failures.size());
+
+        auditLogService.logAction("IMPORT_EXCEL", "CHEMICAL", null, null, summary);
+
+        Map<String, Object> response = new HashMap<>(summary);
+        response.put("message", String.format("Import hoàn tất! Thành công: %d. Thất bại (bỏ qua): %d", successCount, failures.size()));
+        if (!failures.isEmpty()) response.put("failures", failures);
+
+        return response;
+    }
+
+    // HELPER METHODS
     private void normalizeChemicalRequest(ChemicalRequestDTO request) {
         request.setPackaging(normalizationService.normalizeAndLearn(request.getPackaging(), "PACKAGING"));
         request.setUnit(normalizationService.normalizeAndLearn(request.getUnit(), "UNIT"));
@@ -162,8 +193,7 @@ public class ChemicalServiceImpl implements ChemicalService {
     }
 
     private Chemical findChemicalById(UUID id) {
-        return chemicalRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy dữ liệu hóa chất!"));
+        return chemicalRepository.findById(id).orElseThrow(() -> new RuntimeException("Không tìm thấy dữ liệu hóa chất!"));
     }
 
     private List<RoomInventory> getInventoriesWithStock(UUID itemId) {
@@ -172,10 +202,7 @@ public class ChemicalServiceImpl implements ChemicalService {
 
     private String buildRecallInstruction(List<RoomInventory> inventories, String unit) {
         String rooms = inventories.stream()
-                .map(inv -> String.format("[%s: %s %s]",
-                        inv.getRoom().getRoomName(),
-                        inv.getTotalQuantity(),
-                        unit))
+                .map(inv -> String.format("[%s: %s %s]", inv.getRoom().getRoomName(), inv.getTotalQuantity(), unit))
                 .collect(Collectors.joining(", "));
         return "Đã ẩn hóa chất khỏi hệ thống. LƯU Ý: Bạn cần thực hiện thu hồi thực tế tại các phòng sau: " + rooms;
     }

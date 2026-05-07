@@ -3,9 +3,7 @@ package com.keywords2dr.lablab.service.impl;
 import com.keywords2dr.lablab.dto.chemical.ChemicalRequestDTO;
 import com.keywords2dr.lablab.entity.Chemical;
 import com.keywords2dr.lablab.repository.ChemicalRepository;
-import com.keywords2dr.lablab.service.AuditLogService;
 import com.keywords2dr.lablab.service.ChemicalExcelService;
-import com.keywords2dr.lablab.service.ChemicalService;
 import com.keywords2dr.lablab.service.DataNormalizationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,90 +26,40 @@ public class ChemicalExcelServiceImpl implements ChemicalExcelService {
 
     private final ChemicalRepository chemicalRepository;
     private final DataNormalizationService normalizationService;
-    private final ChemicalService chemicalService;
-    private final AuditLogService auditLogService;
 
-    @Override
-    public Map<String, Object> processAndSaveImport(MultipartFile file) {
-        List<ChemicalRequestDTO> dtoList = this.parseChemicalsFromExcel(file);
-
-        int successCount = 0;
-        List<Map<String, String>> failures = new ArrayList<>();
-
-        for (ChemicalRequestDTO dto : dtoList) {
-            try {
-                chemicalService.createChemical(dto);
-                successCount++;
-            } catch (Exception e) {
-                log.warn("❌ Bỏ qua hóa chất [{}] do lỗi: {}", dto.getItemCode(), e.getMessage());
-                failures.add(Map.of(
-                        "itemCode", dto.getItemCode() != null ? dto.getItemCode() : "(không có mã)",
-                        "name",     dto.getName()     != null ? dto.getName()     : "(không có tên)",
-                        "reason",   e.getMessage()
-                ));
-            }
-        }
-
-        Map<String, Object> importSummary = new HashMap<>();
-        importSummary.put("fileName",        file.getOriginalFilename());
-        importSummary.put("totalRowsParsed", dtoList.size());
-        importSummary.put("successCount",    successCount);
-        importSummary.put("failCount",       failures.size());
-
-        auditLogService.logAction("IMPORT_EXCEL", "CHEMICAL", null, null, importSummary);
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("message",      String.format("Import hoàn tất! Thành công: %d. Thất bại (bỏ qua): %d", successCount, failures.size()));
-        response.put("successCount", successCount);
-        response.put("failCount",    failures.size());
-        if (!failures.isEmpty()) {
-            response.put("failures", failures);
-        }
-        return response;
-    }
-
+    // Import / Export
     @Override
     public List<ChemicalRequestDTO> parseChemicalsFromExcel(MultipartFile file) {
         if (!isExcelFormat(file)) throw new RuntimeException("Vui lòng tải lên file Excel (.xlsx)!");
 
         try (InputStream is = file.getInputStream(); Workbook workbook = new XSSFWorkbook(is)) {
-
             Sheet sheet = findDataSheet(workbook);
             Iterator<Row> rows = sheet.iterator();
             List<ChemicalRequestDTO> chemicals = new ArrayList<>();
-
             Map<String, Integer> columnMap = new HashMap<>();
             boolean foundHeader = false;
 
             while (rows.hasNext()) {
                 Row currentRow = rows.next();
-
                 if (!foundHeader) {
-                    if (isHeaderRow(currentRow, columnMap)) {
-                        foundHeader = true;
-                    }
+                    if (isHeaderRow(currentRow, columnMap)) foundHeader = true;
                     continue;
                 }
-
                 if (isRowEmpty(currentRow)) continue;
 
                 ChemicalRequestDTO dto = new ChemicalRequestDTO();
-
                 String name = getCellData(currentRow, columnMap, "TÊN HÓA CHẤT", "TEN");
                 if (name == null || name.isEmpty()) continue;
 
                 dto.setName(name);
                 dto.setFormula(getCellData(currentRow, columnMap, "CÔNG THỨC"));
                 dto.setSupplier(getCellData(currentRow, columnMap, "NHÀ CUNG CẤP"));
-
                 dto.setPackaging(normalizationService.normalizeAndLearn(getCellData(currentRow, columnMap, "ĐÓNG GÓI"), "PACKAGING"));
                 dto.setUnit(normalizationService.normalizeAndLearn(getCellData(currentRow, columnMap, "ML/L/KG/G", "ĐƠN VỊ"), "UNIT"));
 
                 String amountStr = getCellData(currentRow, columnMap, "KHỐI LƯỢNG", "DUNG TÍCH");
                 if (amountStr != null && !amountStr.trim().isEmpty()) {
-                    try {
-                        dto.setAmountPerPackage(new BigDecimal(amountStr));
-                    } catch (NumberFormatException ignored) {}
+                    try { dto.setAmountPerPackage(new BigDecimal(amountStr)); } catch (NumberFormatException ignored) {}
                 }
 
                 String itemCode = getCellData(currentRow, columnMap, "MÃ HÓA CHẤT");
@@ -138,15 +86,13 @@ public class ChemicalExcelServiceImpl implements ChemicalExcelService {
 
         try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Sheet sheet = workbook.createSheet("Kho_Hoa_Chat");
-
             CellStyle headerStyle = createHeaderStyle(workbook);
-            CellStyle dataStyle   = createDataStyle(workbook);
+            CellStyle dataStyle = createDataStyle(workbook);
 
-            String[] headers = {"STT", "Mã Hóa Chất", "Tên Hóa Chất", "Công Thức",
-                    "Đơn Vị Tính", "Quy Cách", "Dung Tích/Gói", "Nhà Cung Cấp"};
-
+            String[] headers = {"STT", "Mã Hóa Chất", "Tên Hóa Chất", "Công Thức", "Đơn Vị Tính", "Quy Cách", "Dung Tích/Gói", "Nhà Cung Cấp"};
             Row headerRow = sheet.createRow(0);
             headerRow.setHeightInPoints(25);
+
             for (int col = 0; col < headers.length; col++) {
                 Cell cell = headerRow.createCell(col);
                 cell.setCellValue(headers[col]);
@@ -165,20 +111,14 @@ public class ChemicalExcelServiceImpl implements ChemicalExcelService {
 
                 Cell amountCell = row.createCell(6);
                 amountCell.setCellStyle(dataStyle);
-                if (c.getAmountPerPackage() != null) {
-                    amountCell.setCellValue(c.getAmountPerPackage().doubleValue());
-                } else {
-                    amountCell.setCellValue("");
-                }
+                amountCell.setCellValue(c.getAmountPerPackage() != null ? c.getAmountPerPackage().doubleValue() : 0);
 
                 createCell(row, 7, c.getSupplier(), dataStyle);
                 rowIdx++;
             }
 
             sheet.setAutoFilter(new org.apache.poi.ss.util.CellRangeAddress(0, rowIdx - 1, 0, headers.length - 1));
-            for (int i = 0; i < headers.length; i++) {
-                sheet.autoSizeColumn(i);
-            }
+            for (int i = 0; i < headers.length; i++) sheet.autoSizeColumn(i);
 
             workbook.write(out);
             return new ByteArrayInputStream(out.toByteArray());
@@ -188,8 +128,7 @@ public class ChemicalExcelServiceImpl implements ChemicalExcelService {
         }
     }
 
-    // --- CÁC HÀM HỖ TRỢ ---
-
+    // HELPER METHODS (Xử lý Excel nội bộ)
     private CellStyle createHeaderStyle(Workbook workbook) {
         CellStyle style = workbook.createCellStyle();
         style.setFillForegroundColor(IndexedColors.DARK_BLUE.getIndex());
@@ -200,12 +139,10 @@ public class ChemicalExcelServiceImpl implements ChemicalExcelService {
         style.setBorderLeft(BorderStyle.THIN);
         style.setAlignment(HorizontalAlignment.CENTER);
         style.setVerticalAlignment(VerticalAlignment.CENTER);
-
         Font font = workbook.createFont();
         font.setColor(IndexedColors.WHITE.getIndex());
         font.setBold(true);
         style.setFont(font);
-
         return style;
     }
 
@@ -217,13 +154,12 @@ public class ChemicalExcelServiceImpl implements ChemicalExcelService {
         style.setBorderLeft(BorderStyle.THIN);
         return style;
     }
+
     private Sheet findDataSheet(Workbook workbook) {
         for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
             Sheet sheet = workbook.getSheetAt(i);
             String sheetName = sheet.getSheetName().toLowerCase();
-            if (sheetName.contains("tổng hợp") || sheetName.contains("khtn") || sheetName.contains("data")) {
-                return sheet;
-            }
+            if (sheetName.contains("tổng hợp") || sheetName.contains("khtn") || sheetName.contains("data")) return sheet;
         }
         return workbook.getSheetAt(0);
     }
@@ -235,10 +171,7 @@ public class ChemicalExcelServiceImpl implements ChemicalExcelService {
             if (cellValue != null && !cellValue.isEmpty()) {
                 String normalizedHeader = cellValue.toUpperCase().trim();
                 columnMap.put(normalizedHeader, c);
-
-                if (normalizedHeader.contains("TÊN") || normalizedHeader.contains("CÔNG THỨC") || normalizedHeader.contains("STT")) {
-                    matchCount++;
-                }
+                if (normalizedHeader.contains("TÊN") || normalizedHeader.contains("CÔNG THỨC") || normalizedHeader.contains("STT")) matchCount++;
             }
         }
         return matchCount >= 2;
@@ -247,9 +180,7 @@ public class ChemicalExcelServiceImpl implements ChemicalExcelService {
     private String getCellData(Row row, Map<String, Integer> columnMap, String... possibleHeaders) {
         for (String headerMatch : possibleHeaders) {
             for (Map.Entry<String, Integer> entry : columnMap.entrySet()) {
-                if (entry.getKey().contains(headerMatch)) {
-                    return getCellValueAsString(row.getCell(entry.getValue()));
-                }
+                if (entry.getKey().contains(headerMatch)) return getCellValueAsString(row.getCell(entry.getValue()));
             }
         }
         return null;
@@ -272,10 +203,8 @@ public class ChemicalExcelServiceImpl implements ChemicalExcelService {
 
     private boolean isExcelFormat(MultipartFile file) {
         String contentType = file.getContentType();
-        String filename    = file.getOriginalFilename();
-        boolean validType  = contentType != null && contentType.contains("spreadsheetml");
-        boolean validExt   = filename != null && filename.toLowerCase().endsWith(".xlsx");
-        return validType || validExt;
+        String filename = file.getOriginalFilename();
+        return (contentType != null && contentType.contains("spreadsheetml")) || (filename != null && filename.toLowerCase().endsWith(".xlsx"));
     }
 
     private String getCellValueAsString(Cell cell) {

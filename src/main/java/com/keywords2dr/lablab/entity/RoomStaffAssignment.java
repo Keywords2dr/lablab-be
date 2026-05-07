@@ -5,9 +5,9 @@ import lombok.*;
 import java.util.UUID;
 
 @Entity
-@Table(name = "room_managers")
+@Table(name = "room_staff_assignments")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
-public class RoomManager {
+public class RoomStaffAssignment {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;

@@ -13,7 +13,7 @@ import com.keywords2dr.lablab.repository.ItemRepository;
 import com.keywords2dr.lablab.repository.RoomInventoryRepository;
 import com.keywords2dr.lablab.repository.RoomRepository;
 import com.keywords2dr.lablab.service.AuditLogService;
-import com.keywords2dr.lablab.service.InventoryService;
+import com.keywords2dr.lablab.service.RoomInventoryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -29,7 +29,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
-public class InventoryServiceImpl implements InventoryService {
+public class RoomInventoryServiceImpl implements RoomInventoryService {
 
     private final ChemicalRepository chemicalRepository;
     private final RoomInventoryRepository roomInventoryRepository;
@@ -226,11 +226,6 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     // PRIVATE HELPERS
-    /**
-     * Tính tổng số lượng thực từ số lượng lẻ + số package.
-     * Chemical: 1 package = amountPerPackage đơn vị thể tích.
-     * Item thường: 1 package = 1 đơn vị.
-     */
     private BigDecimal resolveQuantity(Item item, BigDecimal baseQuantity, int packages) {
         BigDecimal result = baseQuantity != null ? baseQuantity : BigDecimal.ZERO;
         if (packages <= 0) return result;
@@ -244,28 +239,21 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     private void notifyManagers(Room room, String title, String message, String type) {
-        if (room.getManagers() == null || room.getManagers().isEmpty()) return;
-        room.getManagers().forEach(manager ->
+        if (room.getStaffAssignments() == null || room.getStaffAssignments().isEmpty()) return;
+        room.getStaffAssignments().forEach(assignment ->
                 eventPublisher.publishEvent(new NotificationEvent(
-                        manager.getUser().getUserId(), title, message, type)));
+                        assignment.getUser().getUserId(), title, message, type)));
     }
 
-    /**
-     * Batch-load Room theo danh sách ID, trả về Map để tra cứu O(1).
-     */
     private Map<UUID, Room> batchLoadRooms(Set<UUID> ids) {
         return roomRepository.findAllById(ids)
                 .stream()
                 .collect(Collectors.toMap(Room::getRoomId, r -> r));
     }
 
-    /**
-     * Batch-load Item theo danh sách ID, trả về Map để tra cứu O(1).
-     */
     private Map<UUID, Item> batchLoadItems(Set<UUID> ids) {
         return itemRepository.findAllById(ids)
                 .stream()
                 .collect(Collectors.toMap(Item::getItemId, i -> i));
     }
-
 }

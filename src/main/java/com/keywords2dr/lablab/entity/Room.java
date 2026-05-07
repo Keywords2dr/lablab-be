@@ -25,5 +25,5 @@ public class Room {
     private List<RoomInventory> inventories;
 
     @OneToMany(mappedBy = "room", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<RoomManager> managers;
+    private List<RoomStaffAssignment> staffAssignments;
 }

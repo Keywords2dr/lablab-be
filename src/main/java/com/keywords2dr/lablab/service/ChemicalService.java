@@ -7,14 +7,17 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public interface ChemicalService {
-    Chemical createChemical(ChemicalRequestDTO request);
-    Chemical updateChemical(UUID id, ChemicalRequestDTO request);
+    ChemicalAdminResponse createChemical(ChemicalRequestDTO request);
+    ChemicalAdminResponse updateChemical(UUID id, ChemicalRequestDTO request);
     String deleteChemical(UUID id);
     void restoreChemical(UUID id);
     List<ChemicalAdminResponse> getDeletedChemicalsForAdmin();
+    Map<String, List<String>> getChemicalFormOptions();
 
     Page<ChemicalAdminResponse> filterChemicals(String keyword, String packaging, String supplier, String unit, String category, Pageable pageable);
+    Map<String, Object> processBatchImport(List<ChemicalRequestDTO> dtoList, String fileName);
 }

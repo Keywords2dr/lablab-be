@@ -1,17 +1,17 @@
 package com.keywords2dr.lablab.service.impl;
 
-import com.keywords2dr.lablab.dto.room.RoomManagerRequestDTO;
-import com.keywords2dr.lablab.dto.room.RoomManagerResponseDTO;
+import com.keywords2dr.lablab.dto.room.AssignStaffRequestDTO;
+import com.keywords2dr.lablab.dto.room.RoomStaffResponseDTO;
 import com.keywords2dr.lablab.entity.Room;
-import com.keywords2dr.lablab.entity.RoomManager;
+import com.keywords2dr.lablab.entity.RoomStaffAssignment;
 import com.keywords2dr.lablab.entity.User;
 import com.keywords2dr.lablab.event.NotificationEvent;
-import com.keywords2dr.lablab.mapper.RoomManagerMapper;
-import com.keywords2dr.lablab.repository.RoomManagerRepository;
+import com.keywords2dr.lablab.mapper.RoomStaffAssignmentMapper;
+import com.keywords2dr.lablab.repository.RoomStaffAssignmentRepository;
 import com.keywords2dr.lablab.repository.RoomRepository;
 import com.keywords2dr.lablab.repository.UserRepository;
 import com.keywords2dr.lablab.service.AuditLogService;
-import com.keywords2dr.lablab.service.RoomManagerService;
+import com.keywords2dr.lablab.service.RoomStaffAssignmentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -22,31 +22,31 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class RoomManagerServiceImpl implements RoomManagerService {
+public class RoomStaffAssignmentServiceImpl implements RoomStaffAssignmentService {
 
-    private final RoomManagerRepository roomManagerRepository;
+    private final RoomStaffAssignmentRepository roomStaffAssignmentRepository;
     private final RoomRepository roomRepository;
     private final UserRepository userRepository;
     private final AuditLogService auditLogService;
     private final ApplicationEventPublisher eventPublisher;
-    private final RoomManagerMapper roomManagerMapper;
+    private final RoomStaffAssignmentMapper roomStaffAssignmentMapper;
 
     @Override
     @Transactional(readOnly = true)
-    public List<RoomManagerResponseDTO> getManagersByRoom(UUID roomId) {
+    public List<RoomStaffResponseDTO> getStaffByRoom(UUID roomId) {
         if (!roomRepository.existsById(roomId)) {
             throw new RuntimeException("Không tìm thấy Phòng Lab!");
         }
 
-        return roomManagerRepository.findAllByRoom_RoomId(roomId)
+        return roomStaffAssignmentRepository.findAllByRoom_RoomId(roomId)
                 .stream()
-                .map(roomManagerMapper::toResponse)
+                .map(roomStaffAssignmentMapper::toResponse)
                 .toList();
     }
 
     @Override
     @Transactional
-    public RoomManagerResponseDTO assignManager(UUID roomId, RoomManagerRequestDTO request) {
+    public RoomStaffResponseDTO assignStaff(UUID roomId, AssignStaffRequestDTO request) {
         Room room = roomRepository.findById(roomId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy Phòng Lab!"));
 
@@ -57,16 +57,16 @@ public class RoomManagerServiceImpl implements RoomManagerService {
             throw new RuntimeException("Chỉ có Giáo viên (TEACHER) mới được phép quản lý phòng Lab!");
         }
 
-        if (roomManagerRepository.existsByRoom_RoomIdAndUser_UserId(roomId, user.getUserId())) {
+        if (roomStaffAssignmentRepository.existsByRoom_RoomIdAndUser_UserId(roomId, user.getUserId())) {
             throw new RuntimeException("Giáo viên này đã được phân công quản lý phòng này rồi!");
         }
 
-        RoomManager roomManager = RoomManager.builder()
+        RoomStaffAssignment roomStaffAssignment = RoomStaffAssignment.builder()
                 .room(room)
                 .user(user)
                 .build();
 
-        RoomManagerResponseDTO responseDTO = roomManagerMapper.toResponse(roomManagerRepository.save(roomManager));
+        RoomStaffResponseDTO responseDTO = roomStaffAssignmentMapper.toResponse(roomStaffAssignmentRepository.save(roomStaffAssignment));
         auditLogService.logAction("ASSIGN_MANAGER", "ROOM", roomId, null, responseDTO);
 
         eventPublisher.publishEvent(new NotificationEvent(
@@ -81,14 +81,14 @@ public class RoomManagerServiceImpl implements RoomManagerService {
 
     @Override
     @Transactional
-    public void removeManager(UUID roomId, UUID userId) {
-        RoomManager roomManager = roomManagerRepository.findByRoom_RoomIdAndUser_UserId(roomId, userId)
+    public void removeStaff(UUID roomId, UUID userId) {
+        RoomStaffAssignment roomStaffAssignment = roomStaffAssignmentRepository.findByRoom_RoomIdAndUser_UserId(roomId, userId)
                 .orElseThrow(() -> new RuntimeException("Giáo viên này hiện không quản lý phòng Lab này!"));
 
-        RoomManagerResponseDTO oldState = roomManagerMapper.toResponse(roomManager);
-        String roomName = roomManager.getRoom().getRoomName();
+        RoomStaffResponseDTO oldState = roomStaffAssignmentMapper.toResponse(roomStaffAssignment);
+        String roomName = roomStaffAssignment.getRoom().getRoomName();
 
-        roomManagerRepository.delete(roomManager);
+        roomStaffAssignmentRepository.delete(roomStaffAssignment);
         auditLogService.logAction("REMOVE_MANAGER", "ROOM", roomId, oldState, null);
 
         eventPublisher.publishEvent(new NotificationEvent(

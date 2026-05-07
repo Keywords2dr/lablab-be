@@ -9,8 +9,6 @@ import java.util.Map;
 
 public interface ChemicalExcelService {
 
-    Map<String, Object> processAndSaveImport(MultipartFile file);
-
     List<ChemicalRequestDTO> parseChemicalsFromExcel(MultipartFile file);
 
     ByteArrayInputStream exportChemicalsToExcel();
