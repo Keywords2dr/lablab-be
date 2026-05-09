@@ -67,7 +67,7 @@ public class RoomStaffAssignmentServiceImpl implements RoomStaffAssignmentServic
                 .build();
 
         RoomStaffResponseDTO responseDTO = roomStaffAssignmentMapper.toResponse(roomStaffAssignmentRepository.save(roomStaffAssignment));
-        auditLogService.logAction("ASSIGN_MANAGER", "ROOM", roomId, null, responseDTO);
+        auditLogService.logAction("ASSIGN_STAFF", "ROOM_STAFF", roomId, null, responseDTO);
 
         eventPublisher.publishEvent(new NotificationEvent(
                 user.getUserId(),
@@ -89,7 +89,7 @@ public class RoomStaffAssignmentServiceImpl implements RoomStaffAssignmentServic
         String roomName = roomStaffAssignment.getRoom().getRoomName();
 
         roomStaffAssignmentRepository.delete(roomStaffAssignment);
-        auditLogService.logAction("REMOVE_MANAGER", "ROOM", roomId, oldState, null);
+        auditLogService.logAction("REMOVE_STAFF", "ROOM_STAFF", roomId, oldState, null);
 
         eventPublisher.publishEvent(new NotificationEvent(
                 userId,

@@ -167,7 +167,7 @@ public class ChemicalServiceImpl implements ChemicalService {
         summary.put("successCount", successCount);
         summary.put("failCount", failures.size());
 
-        auditLogService.logAction("IMPORT_EXCEL", "CHEMICAL", null, null, summary);
+        auditLogService.logAction("IMPORT_EXCEL", "CHEMICAL_IMPORT", null, null, summary);
 
         Map<String, Object> response = new HashMap<>(summary);
         response.put("message", String.format("Import hoàn tất! Thành công: %d. Thất bại (bỏ qua): %d", successCount, failures.size()));

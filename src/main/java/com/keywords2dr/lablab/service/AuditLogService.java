@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -75,5 +76,10 @@ public class AuditLogService {
     public Page<AuditLog> getFilteredLogs(String role, String module, Pageable pageable) {
         Specification<AuditLog> spec = AuditLogSpecification.filter(role, module);
         return auditLogRepository.findAll(spec, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public List<String> getAvailableModules() {
+        return auditLogRepository.findDistinctModules();
     }
 }

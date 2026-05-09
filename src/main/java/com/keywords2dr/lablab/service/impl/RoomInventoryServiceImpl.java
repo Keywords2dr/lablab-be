@@ -143,7 +143,7 @@ public class RoomInventoryServiceImpl implements RoomInventoryService {
                 roomInventoryRepository.save(inventory);
             }
 
-            auditLogService.logAction("ALLOCATE_INVENTORY", "ROOM", room.getRoomId(), null, allocation);
+            auditLogService.logAction("ALLOCATE_INVENTORY", "ROOM_INVENTORY", room.getRoomId(), null, allocation);
 
             notifyManagers(room,
                     "Hàng nhập kho",
@@ -215,7 +215,7 @@ public class RoomInventoryServiceImpl implements RoomInventoryService {
                 roomInventoryRepository.save(inventory);
             }
 
-            auditLogService.logAction("REVOKE_INVENTORY", "ROOM", room.getRoomId(), null, revocation);
+            auditLogService.logAction("REVOKE_INVENTORY", "ROOM_INVENTORY", room.getRoomId(), null, revocation);
 
             notifyManagers(room,
                     "Hàng xuất kho",
