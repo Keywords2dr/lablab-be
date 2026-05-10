@@ -2,6 +2,7 @@ package com.keywords2dr.lablab.controller;
 
 import com.keywords2dr.lablab.dto.chemical.ChemicalAdminResponse;
 import com.keywords2dr.lablab.dto.chemical.ChemicalRequestDTO;
+import com.keywords2dr.lablab.dto.chemical.DeleteChemicalResponse;
 import com.keywords2dr.lablab.service.ChemicalExcelService;
 import com.keywords2dr.lablab.service.ChemicalService;
 import jakarta.validation.Valid;
@@ -45,9 +46,8 @@ public class ChemicalController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Map<String, String>> deleteChemical(@PathVariable UUID id) {
-        String resultMessage = chemicalService.deleteChemical(id);
-        return ResponseEntity.ok(Map.of("message", resultMessage));
+    public ResponseEntity<DeleteChemicalResponse> deleteChemical(@PathVariable UUID id) {
+        return ResponseEntity.ok(chemicalService.deleteChemical(id));
     }
 
     @PutMapping("/{id}/restore")

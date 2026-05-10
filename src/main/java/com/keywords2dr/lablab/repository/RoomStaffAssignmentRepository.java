@@ -16,4 +16,6 @@ public interface RoomStaffAssignmentRepository extends JpaRepository<RoomStaffAs
     boolean existsByRoom_RoomIdAndUser_UserId(UUID roomId, UUID userId);
 
     Optional<RoomStaffAssignment> findByRoom_RoomIdAndUser_UserId(UUID roomId, UUID userId);
+
+    boolean existsByUser_UserId(UUID userId);
 }

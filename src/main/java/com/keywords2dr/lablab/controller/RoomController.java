@@ -2,6 +2,7 @@ package com.keywords2dr.lablab.controller;
 
 import com.keywords2dr.lablab.dto.room.RoomRequestDTO;
 import com.keywords2dr.lablab.dto.room.RoomResponseDTO;
+import com.keywords2dr.lablab.dto.room.RoomStatsDTO;
 import com.keywords2dr.lablab.service.RoomService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -37,8 +38,7 @@ public class RoomController {
 
     @PatchMapping("/{id}/status")
     public ResponseEntity<Map<String, String>> changeRoomStatus(@PathVariable UUID id, @RequestParam boolean isActive) {
-        String message = roomService.changeRoomStatus(id, isActive);
-        return ResponseEntity.ok(Map.of("message", message));
+        return ResponseEntity.ok(Map.of("message", roomService.changeRoomStatus(id, isActive)));
     }
 
     @GetMapping
@@ -47,17 +47,15 @@ public class RoomController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Boolean isActive,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size,
-            @RequestParam(defaultValue = "roomName") String sortBy,
-            @RequestParam(defaultValue = "asc") String sortDir) {
+            @RequestParam(defaultValue = "10") int size) {
 
-        Sort sort = sortDir.equalsIgnoreCase(Sort.Direction.ASC.name())
-                ? Sort.by(sortBy).ascending()
-                : Sort.by(sortBy).descending();
-
+        Sort sort = Sort.by(Sort.Order.desc("isActive"), Sort.Order.asc("roomName"));
         Pageable pageable = PageRequest.of(page, size, sort);
-        Page<RoomResponseDTO> result = roomService.getRooms(keyword, isActive, pageable);
+        return ResponseEntity.ok(roomService.getRooms(keyword, isActive, pageable));
+    }
 
-        return ResponseEntity.ok(result);
+    @GetMapping("/stats")
+    public ResponseEntity<RoomStatsDTO> getRoomStats() {
+        return ResponseEntity.ok(roomService.getRoomStats());
     }
 }

@@ -2,8 +2,12 @@ package com.keywords2dr.lablab.service.impl;
 
 import com.keywords2dr.lablab.dto.chemical.ChemicalAdminResponse;
 import com.keywords2dr.lablab.dto.chemical.ChemicalRequestDTO;
+import com.keywords2dr.lablab.dto.chemical.DeleteChemicalResponse;
 import com.keywords2dr.lablab.entity.Chemical;
 import com.keywords2dr.lablab.entity.RoomInventory;
+import com.keywords2dr.lablab.exception.BadRequestException;
+import com.keywords2dr.lablab.exception.ConflictException;
+import com.keywords2dr.lablab.exception.ResourceNotFoundException;
 import com.keywords2dr.lablab.mapper.ChemicalMapper;
 import com.keywords2dr.lablab.repository.ChemicalRepository;
 import com.keywords2dr.lablab.repository.ItemRepository;
@@ -17,6 +21,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
@@ -40,8 +45,20 @@ public class ChemicalServiceImpl implements ChemicalService {
     @Transactional
     public ChemicalAdminResponse createChemical(ChemicalRequestDTO request) {
         validateItemCodeUniqueness(request.getItemCode());
-        if (chemicalRepository.existsByNameIgnoreCaseAndSupplierIgnoreCase(request.getName(), request.getSupplier())) {
-            throw new RuntimeException(String.format("Hóa chất [%s] của nhà cung cấp [%s] đã tồn tại trong hệ thống!", request.getName(), request.getSupplier()));
+
+        if (chemicalRepository.existsByNameIgnoreCaseAndSupplierIgnoreCaseAndIsDeletedFalse(
+                request.getName(), request.getSupplier())) {
+            throw new ConflictException(String.format(
+                    "Hóa chất [%s] của nhà cung cấp [%s] đã tồn tại trong hệ thống!",
+                    request.getName(), request.getSupplier()));
+        }
+
+        if (chemicalRepository.existsDeletedByNameIgnoreCaseAndSupplierIgnoreCase(
+                request.getName(), request.getSupplier())) {
+            throw new ConflictException(String.format(
+                    "Hóa chất [%s] của nhà cung cấp [%s] đã tồn tại nhưng đang bị ẩn trong thùng rác. " +
+                            "Vui lòng vào mục 'Thùng rác' và chọn 'Khôi phục' thay vì tạo mới!",
+                    request.getName(), request.getSupplier()));
         }
 
         normalizeChemicalRequest(request);
@@ -62,7 +79,7 @@ public class ChemicalServiceImpl implements ChemicalService {
         }
         if (!chemical.getUnit().equals(request.getUnit())) {
             if (roomInventoryRepository.existsByItem_ItemIdAndTotalQuantityGreaterThan(id, BigDecimal.ZERO)) {
-                throw new RuntimeException("Không thể đổi Đơn vị tính! Hóa chất này đang còn tồn kho thực tế. Vui lòng thu hồi về 0 trước khi đổi.");
+                throw new BadRequestException("Không thể đổi Đơn vị tính! Hóa chất này đang còn tồn kho thực tế. Vui lòng thu hồi về 0 trước khi đổi.");
             }
         }
 
@@ -79,7 +96,7 @@ public class ChemicalServiceImpl implements ChemicalService {
 
     @Override
     @Transactional
-    public String deleteChemical(UUID id) {
+    public DeleteChemicalResponse deleteChemical(UUID id) {
         Chemical chemical = findChemicalById(id);
         List<RoomInventory> activeInventories = getInventoriesWithStock(id);
         ChemicalAdminResponse oldState = chemicalMapper.toAdminResponse(chemical);
@@ -88,18 +105,36 @@ public class ChemicalServiceImpl implements ChemicalService {
         auditLogService.logAction("DELETE", "CHEMICAL", id, oldState, null);
 
         if (activeInventories.isEmpty()) {
-            return "Đã xóa (ẩn) hóa chất thành công.";
+            return DeleteChemicalResponse.builder()
+                    .message("Đã xóa (ẩn) hóa chất thành công.")
+                    .hasActiveInventory(false)
+                    .affectedRooms(List.of())
+                    .build();
         }
-        return buildRecallInstruction(activeInventories, chemical.getUnit());
+
+        List<DeleteChemicalResponse.AffectedRoom> affectedRooms = activeInventories.stream()
+                .map(inv -> DeleteChemicalResponse.AffectedRoom.builder()
+                        .roomName(inv.getRoom().getRoomName())
+                        .remainingQuantity(inv.getTotalQuantity())
+                        .unit(chemical.getUnit())
+                        .build())
+                .collect(Collectors.toList());
+
+        return DeleteChemicalResponse.builder()
+                .message("Đã ẩn hóa chất khỏi hệ thống. LƯU Ý: Cần thực hiện thu hồi thực tế tại các phòng bên dưới.")
+                .hasActiveInventory(true)
+                .affectedRooms(affectedRooms)
+                .build();
     }
 
     @Override
     @Transactional
     public void restoreChemical(UUID id) {
         if (chemicalRepository.restoreById(id) == 0) {
-            throw new RuntimeException("Không tìm thấy hóa chất bị ẩn để khôi phục!");
+            throw new ResourceNotFoundException("Không tìm thấy hóa chất bị ẩn để khôi phục!");
         }
-        Chemical restoredChemical = findChemicalById(id);
+
+        Chemical restoredChemical = findChemicalByIdIgnoreDeleted(id);
         auditLogService.logAction("RESTORE", "CHEMICAL", id, null, chemicalMapper.toAdminResponse(restoredChemical));
     }
 
@@ -150,13 +185,13 @@ public class ChemicalServiceImpl implements ChemicalService {
 
         for (ChemicalRequestDTO dto : dtoList) {
             try {
-                this.createChemical(dto);
+                createChemicalInNewTransaction(dto);
                 successCount++;
             } catch (Exception e) {
                 failures.add(Map.of(
                         "itemCode", dto.getItemCode() != null ? dto.getItemCode() : "(không có mã)",
                         "name", dto.getName() != null ? dto.getName() : "(không có tên)",
-                        "reason", e.getMessage()
+                        "reason", e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()
                 ));
             }
         }
@@ -176,6 +211,11 @@ public class ChemicalServiceImpl implements ChemicalService {
         return response;
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void createChemicalInNewTransaction(ChemicalRequestDTO request) {
+        createChemical(request);
+    }
+
     // HELPER METHODS
     private void normalizeChemicalRequest(ChemicalRequestDTO request) {
         request.setPackaging(normalizationService.normalizeAndLearn(request.getPackaging(), "PACKAGING"));
@@ -188,22 +228,23 @@ public class ChemicalServiceImpl implements ChemicalService {
 
     private void validateItemCodeUniqueness(String itemCode) {
         if (itemRepository.existsByItemCode(itemCode)) {
-            throw new RuntimeException("Mã hóa chất [" + itemCode + "] đã tồn tại!");
+            throw new ConflictException("Mã hóa chất [" + itemCode + "] đã tồn tại!");
         }
     }
 
     private Chemical findChemicalById(UUID id) {
-        return chemicalRepository.findById(id).orElseThrow(() -> new RuntimeException("Không tìm thấy dữ liệu hóa chất!"));
+        return chemicalRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy dữ liệu hóa chất!"));
+    }
+
+    private Chemical findChemicalByIdIgnoreDeleted(UUID id) {
+        return chemicalRepository.findDeletedChemicals().stream()
+                .filter(c -> c.getItemId().equals(id))
+                .findFirst()
+                .orElseGet(() -> findChemicalById(id));
     }
 
     private List<RoomInventory> getInventoriesWithStock(UUID itemId) {
         return roomInventoryRepository.findAllByItem_ItemIdAndTotalQuantityGreaterThan(itemId, BigDecimal.ZERO);
-    }
-
-    private String buildRecallInstruction(List<RoomInventory> inventories, String unit) {
-        String rooms = inventories.stream()
-                .map(inv -> String.format("[%s: %s %s]", inv.getRoom().getRoomName(), inv.getTotalQuantity(), unit))
-                .collect(Collectors.joining(", "));
-        return "Đã ẩn hóa chất khỏi hệ thống. LƯU Ý: Bạn cần thực hiện thu hồi thực tế tại các phòng sau: " + rooms;
     }
 }

@@ -2,10 +2,13 @@ package com.keywords2dr.lablab.service.impl;
 
 import com.keywords2dr.lablab.dto.room.RoomRequestDTO;
 import com.keywords2dr.lablab.dto.room.RoomResponseDTO;
+import com.keywords2dr.lablab.dto.room.RoomStatsDTO;
 import com.keywords2dr.lablab.entity.Room;
 import com.keywords2dr.lablab.mapper.RoomMapper;
 import com.keywords2dr.lablab.repository.RoomRepository;
+import com.keywords2dr.lablab.repository.UserRepository;
 import com.keywords2dr.lablab.repository.specification.RoomSpecification;
+import com.keywords2dr.lablab.repository.specification.UserSpecification;
 import com.keywords2dr.lablab.service.AuditLogService;
 import com.keywords2dr.lablab.service.RoomService;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +26,8 @@ public class RoomServiceImpl implements RoomService {
 
     private final RoomRepository roomRepository;
     private final RoomMapper roomMapper;
-    private final AuditLogService auditLogService; // Ghi vết hệ thống
+    private final AuditLogService auditLogService;
+    private final UserRepository userRepository;
 
     @Override
     @Transactional
@@ -31,13 +35,10 @@ public class RoomServiceImpl implements RoomService {
         if (roomRepository.existsByRoomNameIgnoreCase(request.getRoomName())) {
             throw new RuntimeException("Tên phòng [" + request.getRoomName() + "] đã tồn tại!");
         }
-
         Room room = roomMapper.toEntity(request);
         Room savedRoom = roomRepository.save(room);
-
         RoomResponseDTO responseDTO = roomMapper.toResponse(savedRoom);
         auditLogService.logAction("CREATE", "ROOM", savedRoom.getRoomId(), null, responseDTO);
-
         return responseDTO;
     }
 
@@ -53,13 +54,10 @@ public class RoomServiceImpl implements RoomService {
         }
 
         RoomResponseDTO oldState = roomMapper.toResponse(room);
-
         roomMapper.updateEntityFromDto(request, room);
         Room updatedRoom = roomRepository.save(room);
-
         RoomResponseDTO newState = roomMapper.toResponse(updatedRoom);
         auditLogService.logAction("UPDATE", "ROOM", updatedRoom.getRoomId(), oldState, newState);
-
         return newState;
     }
 
@@ -70,14 +68,11 @@ public class RoomServiceImpl implements RoomService {
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy Phòng Lab!"));
 
         RoomResponseDTO oldState = roomMapper.toResponse(room);
-
         room.setIsActive(isActive);
         roomRepository.save(room);
 
         RoomResponseDTO newState = roomMapper.toResponse(room);
-        String action = isActive ? "ACTIVATE" : "DEACTIVATE";
-        auditLogService.logAction(action, "ROOM", id, oldState, newState);
-
+        auditLogService.logAction(isActive ? "ACTIVATE" : "DEACTIVATE", "ROOM", id, oldState, newState);
         return isActive ? "Đã mở lại hoạt động cho phòng." : "Đã tạm ngưng hoạt động phòng.";
     }
 
@@ -85,7 +80,15 @@ public class RoomServiceImpl implements RoomService {
     @Transactional(readOnly = true)
     public Page<RoomResponseDTO> getRooms(String keyword, Boolean isActive, Pageable pageable) {
         Specification<Room> spec = RoomSpecification.filter(keyword, isActive);
-        Page<Room> roomPage = roomRepository.findAll(spec, pageable);
-        return roomPage.map(roomMapper::toResponse);
+        return roomRepository.findAll(spec, pageable).map(roomMapper::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public RoomStatsDTO getRoomStats() {
+        long totalRooms        = roomRepository.countByIsActive(true);
+        long roomsWithoutStaff = roomRepository.countRoomsWithoutStaff();
+        long totalTeachers     = userRepository.count(UserSpecification.filter("TEACHER", null, true));
+        return new RoomStatsDTO(totalRooms, roomsWithoutStaff, totalTeachers);
     }
 }

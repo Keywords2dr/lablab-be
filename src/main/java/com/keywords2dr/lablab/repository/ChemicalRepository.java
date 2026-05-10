@@ -16,11 +16,11 @@ import java.util.UUID;
 public interface ChemicalRepository extends JpaRepository<Chemical, UUID>, JpaSpecificationExecutor<Chemical> {
 
     @Modifying
+    @Transactional
     @Query("UPDATE Item i SET i.isDeleted = true WHERE i.itemId = :id")
     int softDeleteById(@Param("id") UUID id);
 
     @Modifying
-    @Transactional
     @Query(value = "UPDATE items SET is_deleted = false WHERE item_id = :id", nativeQuery = true)
     int restoreById(@Param("id") UUID id);
 
@@ -29,7 +29,16 @@ public interface ChemicalRepository extends JpaRepository<Chemical, UUID>, JpaSp
 
     List<Chemical> findAllByIsDeletedFalse();
 
-    boolean existsByNameIgnoreCaseAndSupplierIgnoreCase(String name, String supplier);
+    boolean existsByNameIgnoreCaseAndSupplierIgnoreCaseAndIsDeletedFalse(String name, String supplier);
+
+    @Query(value = "SELECT COUNT(*) > 0 FROM chemicals c " +
+            "JOIN items i ON c.item_id = i.item_id " +
+            "WHERE LOWER(i.name) = LOWER(:name) " +
+            "AND LOWER(c.supplier) = LOWER(:supplier) " +
+            "AND i.is_deleted = true", nativeQuery = true)
+    boolean existsDeletedByNameIgnoreCaseAndSupplierIgnoreCase(
+            @Param("name") String name,
+            @Param("supplier") String supplier);
 
     @Query("SELECT DISTINCT c.packaging FROM Chemical c WHERE c.packaging IS NOT NULL AND c.isDeleted = false ORDER BY c.packaging ASC")
     List<String> findDistinctPackagings();

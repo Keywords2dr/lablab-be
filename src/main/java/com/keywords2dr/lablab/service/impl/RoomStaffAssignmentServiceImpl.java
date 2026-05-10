@@ -6,6 +6,9 @@ import com.keywords2dr.lablab.entity.Room;
 import com.keywords2dr.lablab.entity.RoomStaffAssignment;
 import com.keywords2dr.lablab.entity.User;
 import com.keywords2dr.lablab.event.NotificationEvent;
+import com.keywords2dr.lablab.exception.BadRequestException;
+import com.keywords2dr.lablab.exception.ConflictException;
+import com.keywords2dr.lablab.exception.ResourceNotFoundException;
 import com.keywords2dr.lablab.mapper.RoomStaffAssignmentMapper;
 import com.keywords2dr.lablab.repository.RoomStaffAssignmentRepository;
 import com.keywords2dr.lablab.repository.RoomRepository;
@@ -24,6 +27,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class RoomStaffAssignmentServiceImpl implements RoomStaffAssignmentService {
 
+    private static final String ROLE_TEACHER = "TEACHER";
+
     private final RoomStaffAssignmentRepository roomStaffAssignmentRepository;
     private final RoomRepository roomRepository;
     private final UserRepository userRepository;
@@ -35,9 +40,8 @@ public class RoomStaffAssignmentServiceImpl implements RoomStaffAssignmentServic
     @Transactional(readOnly = true)
     public List<RoomStaffResponseDTO> getStaffByRoom(UUID roomId) {
         if (!roomRepository.existsById(roomId)) {
-            throw new RuntimeException("Không tìm thấy Phòng Lab!");
+            throw new ResourceNotFoundException("Không tìm thấy Phòng Lab!");
         }
-
         return roomStaffAssignmentRepository.findAllByRoom_RoomId(roomId)
                 .stream()
                 .map(roomStaffAssignmentMapper::toResponse)
@@ -48,25 +52,34 @@ public class RoomStaffAssignmentServiceImpl implements RoomStaffAssignmentServic
     @Transactional
     public RoomStaffResponseDTO assignStaff(UUID roomId, AssignStaffRequestDTO request) {
         Room room = roomRepository.findById(roomId)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy Phòng Lab!"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy Phòng Lab!"));
 
         User user = userRepository.findById(request.getUserId())
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy Người dùng!"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy Người dùng!"));
 
-        if (!"TEACHER".equalsIgnoreCase(user.getRole())) {
-            throw new RuntimeException("Chỉ có Giáo viên (TEACHER) mới được phép quản lý phòng Lab!");
+        if (!ROLE_TEACHER.equalsIgnoreCase(user.getRole())) {
+            throw new BadRequestException("Chỉ có Giáo viên (TEACHER) mới được phép quản lý phòng Lab!");
         }
 
         if (roomStaffAssignmentRepository.existsByRoom_RoomIdAndUser_UserId(roomId, user.getUserId())) {
-            throw new RuntimeException("Giáo viên này đã được phân công quản lý phòng này rồi!");
+            throw new ConflictException("Giáo viên này đã được phân công quản lý phòng này rồi!");
         }
 
-        RoomStaffAssignment roomStaffAssignment = RoomStaffAssignment.builder()
+        if (roomStaffAssignmentRepository.existsByUser_UserId(user.getUserId())) {
+            throw new ConflictException(
+                    "Giáo viên [" + user.getUsername() + "] đang quản lý một phòng Lab khác. " +
+                            "Mỗi giáo viên chỉ được quản lý 1 phòng duy nhất!"
+            );
+        }
+
+        RoomStaffAssignment assignment = RoomStaffAssignment.builder()
                 .room(room)
                 .user(user)
                 .build();
 
-        RoomStaffResponseDTO responseDTO = roomStaffAssignmentMapper.toResponse(roomStaffAssignmentRepository.save(roomStaffAssignment));
+        RoomStaffResponseDTO responseDTO = roomStaffAssignmentMapper.toResponse(
+                roomStaffAssignmentRepository.save(assignment)
+        );
         auditLogService.logAction("ASSIGN_STAFF", "ROOM_STAFF", roomId, null, responseDTO);
 
         eventPublisher.publishEvent(new NotificationEvent(
@@ -82,13 +95,14 @@ public class RoomStaffAssignmentServiceImpl implements RoomStaffAssignmentServic
     @Override
     @Transactional
     public void removeStaff(UUID roomId, UUID userId) {
-        RoomStaffAssignment roomStaffAssignment = roomStaffAssignmentRepository.findByRoom_RoomIdAndUser_UserId(roomId, userId)
-                .orElseThrow(() -> new RuntimeException("Giáo viên này hiện không quản lý phòng Lab này!"));
+        RoomStaffAssignment assignment = roomStaffAssignmentRepository
+                .findByRoom_RoomIdAndUser_UserId(roomId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Giáo viên này hiện không quản lý phòng Lab này!"));
 
-        RoomStaffResponseDTO oldState = roomStaffAssignmentMapper.toResponse(roomStaffAssignment);
-        String roomName = roomStaffAssignment.getRoom().getRoomName();
+        RoomStaffResponseDTO oldState = roomStaffAssignmentMapper.toResponse(assignment);
+        String roomName = assignment.getRoom().getRoomName();
 
-        roomStaffAssignmentRepository.delete(roomStaffAssignment);
+        roomStaffAssignmentRepository.delete(assignment);
         auditLogService.logAction("REMOVE_STAFF", "ROOM_STAFF", roomId, oldState, null);
 
         eventPublisher.publishEvent(new NotificationEvent(
