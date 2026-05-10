@@ -8,5 +8,5 @@ import lombok.Data;
 public class RoomStatsDTO {
     private long totalRooms;
     private long roomsWithoutStaff;
-    private long totalTeachers;
+    private long totalActiveTeachers;
 }

@@ -4,6 +4,8 @@ import com.keywords2dr.lablab.dto.room.RoomRequestDTO;
 import com.keywords2dr.lablab.dto.room.RoomResponseDTO;
 import com.keywords2dr.lablab.dto.room.RoomStatsDTO;
 import com.keywords2dr.lablab.entity.Room;
+import com.keywords2dr.lablab.exception.ConflictException;
+import com.keywords2dr.lablab.exception.ResourceNotFoundException;
 import com.keywords2dr.lablab.mapper.RoomMapper;
 import com.keywords2dr.lablab.repository.RoomRepository;
 import com.keywords2dr.lablab.repository.UserRepository;
@@ -33,7 +35,7 @@ public class RoomServiceImpl implements RoomService {
     @Transactional
     public RoomResponseDTO createRoom(RoomRequestDTO request) {
         if (roomRepository.existsByRoomNameIgnoreCase(request.getRoomName())) {
-            throw new RuntimeException("Tên phòng [" + request.getRoomName() + "] đã tồn tại!");
+            throw new ConflictException("Tên phòng [" + request.getRoomName() + "] đã tồn tại!");
         }
         Room room = roomMapper.toEntity(request);
         Room savedRoom = roomRepository.save(room);
@@ -46,11 +48,11 @@ public class RoomServiceImpl implements RoomService {
     @Transactional
     public RoomResponseDTO updateRoom(UUID id, RoomRequestDTO request) {
         Room room = roomRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy Phòng Lab!"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy Phòng Lab!"));
 
         if (!room.getRoomName().equalsIgnoreCase(request.getRoomName()) &&
                 roomRepository.existsByRoomNameIgnoreCase(request.getRoomName())) {
-            throw new RuntimeException("Tên phòng [" + request.getRoomName() + "] đã tồn tại!");
+            throw new ConflictException("Tên phòng [" + request.getRoomName() + "] đã tồn tại!");
         }
 
         RoomResponseDTO oldState = roomMapper.toResponse(room);
@@ -65,7 +67,11 @@ public class RoomServiceImpl implements RoomService {
     @Transactional
     public String changeRoomStatus(UUID id, boolean isActive) {
         Room room = roomRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy Phòng Lab!"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy Phòng Lab!"));
+
+        if (Boolean.valueOf(isActive).equals(room.getIsActive())) {
+            return isActive ? "Phòng đã đang hoạt động." : "Phòng đã tạm ngưng.";
+        }
 
         RoomResponseDTO oldState = roomMapper.toResponse(room);
         room.setIsActive(isActive);
@@ -78,6 +84,14 @@ public class RoomServiceImpl implements RoomService {
 
     @Override
     @Transactional(readOnly = true)
+    public RoomResponseDTO getRoomById(UUID id) {
+        Room room = roomRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy Phòng Lab!"));
+        return roomMapper.toResponse(room);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Page<RoomResponseDTO> getRooms(String keyword, Boolean isActive, Pageable pageable) {
         Specification<Room> spec = RoomSpecification.filter(keyword, isActive);
         return roomRepository.findAll(spec, pageable).map(roomMapper::toResponse);
@@ -86,9 +100,9 @@ public class RoomServiceImpl implements RoomService {
     @Override
     @Transactional(readOnly = true)
     public RoomStatsDTO getRoomStats() {
-        long totalRooms        = roomRepository.countByIsActive(true);
-        long roomsWithoutStaff = roomRepository.countRoomsWithoutStaff();
-        long totalTeachers     = userRepository.count(UserSpecification.filter("TEACHER", null, true));
-        return new RoomStatsDTO(totalRooms, roomsWithoutStaff, totalTeachers);
+        long totalRooms            = roomRepository.countByIsActive(true);
+        long roomsWithoutStaff     = roomRepository.countRoomsWithoutStaff();
+        long totalActiveTeachers   = userRepository.count(UserSpecification.filter("TEACHER", null, true));
+        return new RoomStatsDTO(totalRooms, roomsWithoutStaff, totalActiveTeachers);
     }
 }

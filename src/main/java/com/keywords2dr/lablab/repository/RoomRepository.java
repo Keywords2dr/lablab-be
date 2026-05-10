@@ -4,6 +4,7 @@ import com.keywords2dr.lablab.entity.Room;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.UUID;
@@ -23,4 +24,7 @@ public interface RoomRepository extends JpaRepository<Room, UUID>, JpaSpecificat
               )
             """)
     long countRoomsWithoutStaff();
+
+    @Query("SELECT COUNT(a) FROM RoomStaffAssignment a WHERE a.room.roomId = :roomId")
+    int countStaffByRoomId(@Param("roomId") UUID roomId);
 }

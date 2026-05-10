@@ -9,4 +9,5 @@ public class RoomResponseDTO {
     private String roomName;
     private String description;
     private Boolean isActive;
+    private int staffCount;
 }

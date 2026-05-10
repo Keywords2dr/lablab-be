@@ -1,6 +1,6 @@
 //package com.keywords2dr.lablab.config;
 //
-//import com.keywords2dr.lablab.entity.Profile; // Nhớ import Profile
+//import com.keywords2dr.lablab.entity.Profile;
 //import com.keywords2dr.lablab.entity.User;
 //import com.keywords2dr.lablab.repository.UserRepository;
 //import lombok.RequiredArgsConstructor;
@@ -19,24 +19,40 @@
 //
 //    @Override
 //    public void run(String... args) {
-//        // Khởi tạo ADMIN
-//        createUser("admin", "admin123", "ADMIN", "Quản trị viên LabLab", "Khoa CNTT");
+//        // 1. Khởi tạo ADMIN (Giữ nguyên username/password)
+//        createUser("admin", "admin123", "ADMIN",
+//                "Nguyễn Quản Trị", "admin@qnu.edu.vn",
+//                "Khoa Công nghệ thông tin", "Công nghệ thông tin", "Kỹ thuật phần mềm");
 //
-//        // Khởi tạo TEACHER
-//        for (int i = 1; i <= 5; i++) {
-//            createUser("teacher" + i, "teacher123", "TEACHER", "Giáo viên " + i, "Khoa Hóa Học");
+//        // Danh sách tên mẫu cho dữ liệu nhìn thực tế
+//        String[] teacherNames = {"Trần Văn An", "Lê Thị Bình", "Phạm Văn Cường", "Hoàng Thị Dung", "Vũ Văn Em", "Đặng Thị Hoa", "Bùi Văn Giang", "Đỗ Thị Hạnh", "Hồ Văn Inh", "Ngô Thị Khanh"};
+//        String[] studentNames = {"Nguyễn Thị Kiều", "Trần Văn Long", "Lê Thị Mai", "Phạm Văn Nam", "Hoàng Thị Oanh", "Vũ Văn Phong", "Đặng Thị Quỳnh", "Bùi Văn Rồng", "Đỗ Thị Sương", "Hồ Văn Tài"};
+//
+//        // 2. Khởi tạo 10 TEACHER (Password: 123456)
+//        for (int i = 0; i < 10; i++) {
+//            createUser("teacher" + (i + 1), "123456", "TEACHER",
+//                    teacherNames[i],
+//                    "teacher" + (i + 1) + "@qnu.edu.vn",
+//                    "Khoa Khoa học Tự nhiên",
+//                    "Hóa học",
+//                    "Bộ môn Hóa Hữu cơ");
 //        }
 //
-//        // Khởi tạo STUDENT
-//        for (int i = 1; i <= 5; i++) {
-//            createUser("student" + i, "student123", "STUDENT", "Sinh viên " + i, "Khoa Sinh Học");
+//        // 3. Khởi tạo 10 STUDENT (Password: 123456)
+//        for (int i = 0; i < 10; i++) {
+//            createUser("student" + (i + 1), "123456", "STUDENT",
+//                    studentNames[i],
+//                    "student" + (i + 1) + "@st.qnu.edu.vn",
+//                    "Khoa Khoa học Tự nhiên",
+//                    "Sinh học",
+//                    "Bộ môn Vi sinh");
 //        }
 //    }
 //
 //    /**
-//     * Cập nhật hàm này để nhận thêm fullName và department
+//     * Hàm helper để tạo user với đầy đủ thông tin Profile (Khớp với file Profile.java)
 //     */
-//    private void createUser(String username, String password, String role, String fullName, String department) {
+//    private void createUser(String username, String password, String role, String fullName, String email, String faculty, String major, String department) {
 //        if (userRepository.findByUsername(username).isEmpty()) {
 //
 //            // 1. Tạo đối tượng User
@@ -47,22 +63,23 @@
 //                    .isActive(true)
 //                    .build();
 //
-//            // 2. Tạo đối tượng Profile (Dữ liệu mẫu)
+//            // 2. Tạo đối tượng Profile chứa thông tin chi tiết
 //            Profile profile = Profile.builder()
 //                    .fullName(fullName)
-//                    .department(department)
-//                    .email(username + "@qnu.edu.vn") // Tự độnga ra email mẫu
-//                    .user(user) // QUAN TRỌNG: Gắn user vào profile
+//                    .email(email)
+//                    .faculty(faculty)       // Khoa
+//                    .major(major)           // Ngành
+//                    .department(department) // Bộ môn
+//                    .user(user)             // Gắn kết với user
 //                    .build();
 //
 //            // 3. Gắn ngược profile vào user
 //            user.setProfile(profile);
 //
-//            // 4. Lưu User.
-//            // NHỜ CÓ cascade = CascadeType.ALL, SPRING SẼ TỰ ĐỘNG LƯU LUÔN PROFILE XUỐNG DB!
+//            // 4. Lưu xuống Database (CascadeType.ALL sẽ tự lưu Profile)
 //            userRepository.save(user);
 //
-//            log.info(">>> Đã tạo thành công tài khoản & Profile: [{}] - Role: {}", username, role);
+//            log.info(">>> Đã tạo thành công tài khoản: [{}] - Role: {}", username, role);
 //        } else {
 //            log.debug("--- Tài khoản [{}] đã tồn tại, bỏ qua.", username);
 //        }

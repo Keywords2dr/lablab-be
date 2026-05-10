@@ -32,13 +32,23 @@ public class RoomController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<RoomResponseDTO> updateRoom(@PathVariable UUID id, @Valid @RequestBody RoomRequestDTO request) {
+    public ResponseEntity<RoomResponseDTO> updateRoom(
+            @PathVariable UUID id,
+            @Valid @RequestBody RoomRequestDTO request) {
         return ResponseEntity.ok(roomService.updateRoom(id, request));
     }
 
     @PatchMapping("/{id}/status")
-    public ResponseEntity<Map<String, String>> changeRoomStatus(@PathVariable UUID id, @RequestParam boolean isActive) {
+    public ResponseEntity<Map<String, String>> changeRoomStatus(
+            @PathVariable UUID id,
+            @RequestParam boolean isActive) {
         return ResponseEntity.ok(Map.of("message", roomService.changeRoomStatus(id, isActive)));
+    }
+
+    @GetMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<RoomResponseDTO> getRoomById(@PathVariable UUID id) {
+        return ResponseEntity.ok(roomService.getRoomById(id));
     }
 
     @GetMapping

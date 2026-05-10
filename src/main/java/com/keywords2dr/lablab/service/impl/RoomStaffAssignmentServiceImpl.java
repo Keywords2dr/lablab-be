@@ -2,6 +2,7 @@ package com.keywords2dr.lablab.service.impl;
 
 import com.keywords2dr.lablab.dto.room.AssignStaffRequestDTO;
 import com.keywords2dr.lablab.dto.room.RoomStaffResponseDTO;
+import com.keywords2dr.lablab.dto.user.UserResponseDTO;
 import com.keywords2dr.lablab.entity.Room;
 import com.keywords2dr.lablab.entity.RoomStaffAssignment;
 import com.keywords2dr.lablab.entity.User;
@@ -10,13 +11,16 @@ import com.keywords2dr.lablab.exception.BadRequestException;
 import com.keywords2dr.lablab.exception.ConflictException;
 import com.keywords2dr.lablab.exception.ResourceNotFoundException;
 import com.keywords2dr.lablab.mapper.RoomStaffAssignmentMapper;
+import com.keywords2dr.lablab.mapper.UserMapper;
 import com.keywords2dr.lablab.repository.RoomStaffAssignmentRepository;
 import com.keywords2dr.lablab.repository.RoomRepository;
 import com.keywords2dr.lablab.repository.UserRepository;
+import com.keywords2dr.lablab.repository.specification.UserSpecification;
 import com.keywords2dr.lablab.service.AuditLogService;
 import com.keywords2dr.lablab.service.RoomStaffAssignmentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,6 +39,7 @@ public class RoomStaffAssignmentServiceImpl implements RoomStaffAssignmentServic
     private final AuditLogService auditLogService;
     private final ApplicationEventPublisher eventPublisher;
     private final RoomStaffAssignmentMapper roomStaffAssignmentMapper;
+    private final UserMapper userMapper;
 
     @Override
     @Transactional(readOnly = true)
@@ -45,6 +50,20 @@ public class RoomStaffAssignmentServiceImpl implements RoomStaffAssignmentServic
         return roomStaffAssignmentRepository.findAllByRoom_RoomId(roomId)
                 .stream()
                 .map(roomStaffAssignmentMapper::toResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UserResponseDTO> getAssignableTeachers(UUID roomId, String keyword) {
+        if (!roomRepository.existsById(roomId)) {
+            throw new ResourceNotFoundException("Không tìm thấy Phòng Lab!");
+        }
+
+        Specification<User> spec = UserSpecification.filter(ROLE_TEACHER, keyword, true, true);
+        return userRepository.findAll(spec)
+                .stream()
+                .map(userMapper::toUserResponse)
                 .toList();
     }
 

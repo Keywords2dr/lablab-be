@@ -12,6 +12,7 @@ public interface RoomService {
     RoomResponseDTO createRoom(RoomRequestDTO request);
     RoomResponseDTO updateRoom(UUID id, RoomRequestDTO request);
     String changeRoomStatus(UUID id, boolean isActive);
+    RoomResponseDTO getRoomById(UUID id);
     Page<RoomResponseDTO> getRooms(String keyword, Boolean isActive, Pageable pageable);
     RoomStatsDTO getRoomStats();
 }

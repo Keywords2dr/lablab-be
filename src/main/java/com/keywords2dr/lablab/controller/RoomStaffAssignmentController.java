@@ -2,6 +2,7 @@ package com.keywords2dr.lablab.controller;
 
 import com.keywords2dr.lablab.dto.room.AssignStaffRequestDTO;
 import com.keywords2dr.lablab.dto.room.RoomStaffResponseDTO;
+import com.keywords2dr.lablab.dto.user.UserResponseDTO;
 import com.keywords2dr.lablab.service.RoomStaffAssignmentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -28,11 +29,19 @@ public class RoomStaffAssignmentController {
         return ResponseEntity.ok(roomStaffAssignmentService.getStaffByRoom(roomId));
     }
 
+    @GetMapping("/assignable")
+    public ResponseEntity<List<UserResponseDTO>> getAssignableTeachers(
+            @PathVariable UUID roomId,
+            @RequestParam(required = false) String keyword) {
+        return ResponseEntity.ok(roomStaffAssignmentService.getAssignableTeachers(roomId, keyword));
+    }
+
     @PostMapping
     public ResponseEntity<RoomStaffResponseDTO> assignStaff(
             @PathVariable UUID roomId,
             @Valid @RequestBody AssignStaffRequestDTO request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(roomStaffAssignmentService.assignStaff(roomId, request));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(roomStaffAssignmentService.assignStaff(roomId, request));
     }
 
     @DeleteMapping("/{userId}")

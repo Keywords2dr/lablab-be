@@ -9,5 +9,6 @@ public class RoomStaffResponseDTO {
     private UUID roomId;
     private UUID userId;
     private String username;
+    private String fullName;
     private String role;
 }
