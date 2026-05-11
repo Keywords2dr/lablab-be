@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -114,12 +115,8 @@ public class RoomInventoryServiceImpl implements RoomInventoryService {
                     throw new RuntimeException("Vật tư [" + item.getName() + "] đã bị xóa khỏi hệ thống!");
                 }
 
-                int addedPackages = dto.getPackageCount() != null ? dto.getPackageCount() : 0;
-                BigDecimal addedQuantity = resolveQuantity(item, dto.getQuantity(), addedPackages);
-
-                if (addedQuantity.compareTo(BigDecimal.ZERO) == 0 && addedPackages == 0) {
-                    throw new RuntimeException("Phải nhập số lượng hộp/chai hoặc dung tích lẻ cho: " + item.getName());
-                }
+                int addedPackages = dto.getPackageCount();
+                BigDecimal addedQuantity = resolveQuantity(item, addedPackages);
 
                 RoomInventory inventory = roomInventoryRepository
                         .findByRoom_RoomIdAndItem_ItemId(room.getRoomId(), item.getItemId())
@@ -144,7 +141,8 @@ public class RoomInventoryServiceImpl implements RoomInventoryService {
                 roomInventoryRepository.save(inventory);
             }
 
-            auditLogService.logAction("ALLOCATE_INVENTORY", "ROOM_INVENTORY", room.getRoomId(), null, allocation);
+            Object auditPayload = buildAuditPayload(room.getRoomId(), allocation.getItems(), itemMap);
+            auditLogService.logAction("ALLOCATE_INVENTORY", "ROOM_INVENTORY", room.getRoomId(), null, auditPayload);
 
             notifyManagers(room,
                     "Hàng nhập kho",
@@ -186,12 +184,8 @@ public class RoomInventoryServiceImpl implements RoomInventoryService {
                                 "Vật tư [" + item.getName() + "] không tồn tại trong phòng ["
                                         + room.getRoomName() + "] để thu hồi!"));
 
-                int reducePackages = dto.getPackageCount() != null ? dto.getPackageCount() : 0;
-                BigDecimal reduceQuantity = resolveQuantity(item, dto.getQuantity(), reducePackages);
-
-                if (reduceQuantity.compareTo(BigDecimal.ZERO) == 0 && reducePackages == 0) {
-                    throw new RuntimeException("Phải nhập số lượng hộp/chai hoặc dung tích lẻ để thu hồi cho: " + item.getName());
-                }
+                int reducePackages = dto.getPackageCount();
+                BigDecimal reduceQuantity = resolveQuantity(item, reducePackages);
 
                 int currentPackages = inventory.getPackageCount() != null ? inventory.getPackageCount() : 0;
                 if (currentPackages < reducePackages) {
@@ -216,7 +210,8 @@ public class RoomInventoryServiceImpl implements RoomInventoryService {
                 roomInventoryRepository.save(inventory);
             }
 
-            auditLogService.logAction("REVOKE_INVENTORY", "ROOM_INVENTORY", room.getRoomId(), null, revocation);
+            Object auditPayload = buildAuditPayload(room.getRoomId(), revocation.getItems(), itemMap);
+            auditLogService.logAction("REVOKE_INVENTORY", "ROOM_INVENTORY", room.getRoomId(), null, auditPayload);
 
             notifyManagers(room,
                     "Hàng xuất kho",
@@ -227,16 +222,50 @@ public class RoomInventoryServiceImpl implements RoomInventoryService {
     }
 
     // PRIVATE HELPERS
-    private BigDecimal resolveQuantity(Item item, BigDecimal baseQuantity, int packages) {
-        BigDecimal result = baseQuantity != null ? baseQuantity : BigDecimal.ZERO;
-        if (packages <= 0) return result;
-
-        if (item instanceof Chemical chemical && chemical.getAmountPerPackage() != null) {
-            result = result.add(chemical.getAmountPerPackage().multiply(new BigDecimal(packages)));
-        } else if (!(item instanceof Chemical)) {
-            result = result.add(new BigDecimal(packages));
+    private BigDecimal resolveQuantity(Item item, int packages) {
+        if (item instanceof Chemical chemical) {
+            if (chemical.getAmountPerPackage() == null) {
+                throw new RuntimeException(
+                        "Hóa chất [" + chemical.getName() + "] chưa có định mức theo gói (amountPerPackage). " +
+                                "Vui lòng cập nhật thông tin hóa chất trước khi phân bổ theo gói!"
+                );
+            }
+            return chemical.getAmountPerPackage().multiply(new BigDecimal(packages));
         }
-        return result;
+        return new BigDecimal(packages);
+    }
+
+    private <T> Map<String, Object> buildAuditPayload(UUID roomId,
+                                                      List<T> items,
+                                                      Map<UUID, Item> itemMap) {
+        List<Map<String, Object>> itemDetails = items.stream().map(dto -> {
+            UUID itemId;
+            int packageCount;
+
+            if (dto instanceof AllocateItemDTO a) {
+                itemId = a.getItemId();
+                packageCount = a.getPackageCount();
+            } else if (dto instanceof RevokeItemDTO r) {
+                itemId = r.getItemId();
+                packageCount = r.getPackageCount();
+            } else {
+                throw new IllegalArgumentException("Unsupported DTO type: " + dto.getClass());
+            }
+
+            Item item = itemMap.get(itemId);
+            BigDecimal totalQuantity = resolveQuantity(item, packageCount);
+
+            Map<String, Object> detail = new HashMap<>();
+            detail.put("itemId", itemId);
+            detail.put("packageCount", packageCount);
+            detail.put("totalQuantity", totalQuantity);
+            return detail;
+        }).toList();
+
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("roomId", roomId);
+        payload.put("items", itemDetails);
+        return payload;
     }
 
     private void notifyManagers(Room room, String title, String message, String type) {
@@ -244,12 +273,6 @@ public class RoomInventoryServiceImpl implements RoomInventoryService {
         room.getStaffAssignments().forEach(assignment ->
                 eventPublisher.publishEvent(new NotificationEvent(
                         assignment.getUser().getUserId(), title, message, type)));
-    }
-
-    private Map<UUID, Room> batchLoadRooms(Set<UUID> ids) {
-        return roomRepository.findAllById(ids)
-                .stream()
-                .collect(Collectors.toMap(Room::getRoomId, r -> r));
     }
 
     private Map<UUID, Room> batchLoadRoomsWithStaff(Set<UUID> ids) {

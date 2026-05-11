@@ -21,7 +21,6 @@ public interface RoomInventoryRepository extends JpaRepository<RoomInventory, UU
 
     List<RoomInventory> findAllByRoom_RoomId(UUID roomId);
 
-    // Vấn đề 2: load toàn bộ tồn kho dương trong 1 query duy nhất, kèm item + room
     @Query("""
             SELECT ri FROM RoomInventory ri
             JOIN FETCH ri.item
