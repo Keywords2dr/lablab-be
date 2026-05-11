@@ -18,8 +18,8 @@ public class Room {
 
     private String description;
 
-    @Column(name = "is_active")
-    private Boolean isActive;
+    @Column(name = "is_active", columnDefinition = "boolean default true", nullable = false)
+    private Boolean isActive = true;
 
     @OneToMany(mappedBy = "room", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<RoomInventory> inventories;

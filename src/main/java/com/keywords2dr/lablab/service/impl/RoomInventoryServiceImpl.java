@@ -8,7 +8,6 @@ import com.keywords2dr.lablab.entity.Room;
 import com.keywords2dr.lablab.entity.RoomInventory;
 import com.keywords2dr.lablab.event.NotificationEvent;
 import com.keywords2dr.lablab.mapper.RoomInventoryMapper;
-import com.keywords2dr.lablab.repository.ChemicalRepository;
 import com.keywords2dr.lablab.repository.ItemRepository;
 import com.keywords2dr.lablab.repository.RoomInventoryRepository;
 import com.keywords2dr.lablab.repository.RoomRepository;
@@ -31,7 +30,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class RoomInventoryServiceImpl implements RoomInventoryService {
 
-    private final ChemicalRepository chemicalRepository;
     private final RoomInventoryRepository roomInventoryRepository;
     private final RoomRepository roomRepository;
     private final ItemRepository itemRepository;
@@ -42,17 +40,15 @@ public class RoomInventoryServiceImpl implements RoomInventoryService {
     @Override
     @Transactional(readOnly = true)
     public List<GlobalInventoryResponse> getGlobalChemicalInventory() {
-        List<Chemical> allChemicals = chemicalRepository.findAll();
+        List<RoomInventory> allStocks = roomInventoryRepository.findAllPositiveStockWithItemAndRoom();
 
-        return allChemicals.stream().map(chemical -> {
-            GlobalInventoryResponse response = new GlobalInventoryResponse();
-            response.setItemId(chemical.getItemId());
-            response.setItemCode(chemical.getItemCode());
-            response.setName(chemical.getName());
-            response.setUnit(chemical.getUnit());
+        Map<UUID, List<RoomInventory>> byItem = allStocks.stream()
+                .filter(ri -> ri.getItem() instanceof Chemical)
+                .collect(Collectors.groupingBy(ri -> ri.getItem().getItemId()));
 
-            List<RoomInventory> stocks = roomInventoryRepository
-                    .findAllByItem_ItemIdAndTotalQuantityGreaterThan(chemical.getItemId(), BigDecimal.ZERO);
+        return byItem.values().stream().map(stocks -> {
+            Item item = stocks.get(0).getItem();
+            Chemical chemical = (Chemical) item;
 
             BigDecimal total = stocks.stream()
                     .map(RoomInventory::getTotalQuantity)
@@ -63,6 +59,11 @@ public class RoomInventoryServiceImpl implements RoomInventoryService {
                             s.getRoom().getRoomName(), s.getTotalQuantity()))
                     .toList();
 
+            GlobalInventoryResponse response = new GlobalInventoryResponse();
+            response.setItemId(chemical.getItemId());
+            response.setItemCode(chemical.getItemCode());
+            response.setName(chemical.getName());
+            response.setUnit(chemical.getUnit());
             response.setGrandTotal(total);
             response.setRoomDetails(details);
             return response;
@@ -84,7 +85,7 @@ public class RoomInventoryServiceImpl implements RoomInventoryService {
     @Override
     @Transactional
     public void allocateItems(AllocateRequestDTO request) {
-        Map<UUID, Room> roomMap = batchLoadRooms(
+        Map<UUID, Room> roomMap = batchLoadRoomsWithStaff(
                 request.getAllocations().stream()
                         .map(RoomAllocationDTO::getRoomId)
                         .collect(Collectors.toSet())
@@ -156,7 +157,7 @@ public class RoomInventoryServiceImpl implements RoomInventoryService {
     @Override
     @Transactional
     public void revokeItems(RevokeRequestDTO request) {
-        Map<UUID, Room> roomMap = batchLoadRooms(
+        Map<UUID, Room> roomMap = batchLoadRoomsWithStaff(
                 request.getRevocations().stream()
                         .map(RoomRevokeDTO::getRoomId)
                         .collect(Collectors.toSet())
@@ -247,6 +248,12 @@ public class RoomInventoryServiceImpl implements RoomInventoryService {
 
     private Map<UUID, Room> batchLoadRooms(Set<UUID> ids) {
         return roomRepository.findAllById(ids)
+                .stream()
+                .collect(Collectors.toMap(Room::getRoomId, r -> r));
+    }
+
+    private Map<UUID, Room> batchLoadRoomsWithStaff(Set<UUID> ids) {
+        return roomRepository.findAllByIdWithStaff(ids)
                 .stream()
                 .collect(Collectors.toMap(Room::getRoomId, r -> r));
     }

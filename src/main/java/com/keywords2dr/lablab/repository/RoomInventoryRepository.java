@@ -2,6 +2,7 @@ package com.keywords2dr.lablab.repository;
 
 import com.keywords2dr.lablab.entity.RoomInventory;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
@@ -19,4 +20,13 @@ public interface RoomInventoryRepository extends JpaRepository<RoomInventory, UU
     Optional<RoomInventory> findByRoom_RoomIdAndItem_ItemId(UUID roomId, UUID itemId);
 
     List<RoomInventory> findAllByRoom_RoomId(UUID roomId);
+
+    // Vấn đề 2: load toàn bộ tồn kho dương trong 1 query duy nhất, kèm item + room
+    @Query("""
+            SELECT ri FROM RoomInventory ri
+            JOIN FETCH ri.item
+            JOIN FETCH ri.room
+            WHERE ri.totalQuantity > 0
+            """)
+    List<RoomInventory> findAllPositiveStockWithItemAndRoom();
 }

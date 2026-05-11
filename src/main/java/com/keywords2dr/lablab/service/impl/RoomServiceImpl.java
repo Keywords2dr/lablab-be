@@ -94,15 +94,18 @@ public class RoomServiceImpl implements RoomService {
     @Transactional(readOnly = true)
     public Page<RoomResponseDTO> getRooms(String keyword, Boolean isActive, Pageable pageable) {
         Specification<Room> spec = RoomSpecification.filter(keyword, isActive);
-        return roomRepository.findAll(spec, pageable).map(roomMapper::toResponse);
+        return roomRepository.findAll(spec, pageable).map(room -> {
+            int staffCount = roomRepository.countStaffByRoomId(room.getRoomId());
+            return roomMapper.toResponseWithCount(room, staffCount);
+        });
     }
 
     @Override
     @Transactional(readOnly = true)
     public RoomStatsDTO getRoomStats() {
-        long totalRooms            = roomRepository.countByIsActive(true);
-        long roomsWithoutStaff     = roomRepository.countRoomsWithoutStaff();
-        long totalActiveTeachers   = userRepository.count(UserSpecification.filter("TEACHER", null, true));
+        long totalRooms          = roomRepository.count();
+        long roomsWithoutStaff   = roomRepository.countRoomsWithoutStaff();
+        long totalActiveTeachers = userRepository.count(UserSpecification.filter("TEACHER", null, true));
         return new RoomStatsDTO(totalRooms, roomsWithoutStaff, totalActiveTeachers);
     }
 }
