@@ -13,6 +13,8 @@ public class ChemicalSpecification {
     private static final int MAX_KEYWORD_LENGTH = 100;
     private static final int MAX_FILTER_LENGTH = 100;
 
+    private static final char ESCAPE_CHAR = '\\';
+
     public static Specification<Chemical> filter(
             String keyword,
             String packaging,
@@ -28,19 +30,24 @@ public class ChemicalSpecification {
             predicates.add(criteriaBuilder.equal(root.get("isDeleted"), false));
 
             if (keyword != null) {
-
                 String escaped = escapeLikePattern(keyword);
                 String searchPattern = "%" + escaped.toLowerCase() + "%";
 
                 Predicate nameMatch = criteriaBuilder.like(
-                        criteriaBuilder.lower(root.get("name")), searchPattern);
+                        criteriaBuilder.lower(root.get("name")),
+                        searchPattern,
+                        ESCAPE_CHAR);
+
                 Predicate codeMatch = criteriaBuilder.like(
-                        criteriaBuilder.lower(root.get("itemCode")), searchPattern);
+                        criteriaBuilder.lower(root.get("itemCode")),
+                        searchPattern,
+                        ESCAPE_CHAR);
 
                 Predicate formulaMatch = criteriaBuilder.like(
                         criteriaBuilder.lower(
                                 criteriaBuilder.coalesce(root.get("formula"), "")),
-                        searchPattern);
+                        searchPattern,
+                        ESCAPE_CHAR);
 
                 predicates.add(criteriaBuilder.or(nameMatch, codeMatch, formulaMatch));
             }

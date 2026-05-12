@@ -141,7 +141,8 @@ public class RoomInventoryServiceImpl implements RoomInventoryService {
                 roomInventoryRepository.save(inventory);
             }
 
-            Object auditPayload = buildAuditPayload(room.getRoomId(), allocation.getItems(), itemMap);
+            // ✅ Truyền thêm room.getRoomName() vào buildAuditPayload
+            Object auditPayload = buildAuditPayload(room.getRoomId(), room.getRoomName(), allocation.getItems(), itemMap);
             auditLogService.logAction("ALLOCATE_INVENTORY", "ROOM_INVENTORY", room.getRoomId(), null, auditPayload);
 
             notifyManagers(room,
@@ -210,7 +211,7 @@ public class RoomInventoryServiceImpl implements RoomInventoryService {
                 roomInventoryRepository.save(inventory);
             }
 
-            Object auditPayload = buildAuditPayload(room.getRoomId(), revocation.getItems(), itemMap);
+            Object auditPayload = buildAuditPayload(room.getRoomId(), room.getRoomName(), revocation.getItems(), itemMap);
             auditLogService.logAction("REVOKE_INVENTORY", "ROOM_INVENTORY", room.getRoomId(), null, auditPayload);
 
             notifyManagers(room,
@@ -236,6 +237,7 @@ public class RoomInventoryServiceImpl implements RoomInventoryService {
     }
 
     private <T> Map<String, Object> buildAuditPayload(UUID roomId,
+                                                      String roomName,
                                                       List<T> items,
                                                       Map<UUID, Item> itemMap) {
         List<Map<String, Object>> itemDetails = items.stream().map(dto -> {
@@ -257,6 +259,8 @@ public class RoomInventoryServiceImpl implements RoomInventoryService {
 
             Map<String, Object> detail = new HashMap<>();
             detail.put("itemId", itemId);
+            detail.put("itemCode", item.getItemCode());
+            detail.put("itemName", item.getName());
             detail.put("packageCount", packageCount);
             detail.put("totalQuantity", totalQuantity);
             return detail;
@@ -264,6 +268,7 @@ public class RoomInventoryServiceImpl implements RoomInventoryService {
 
         Map<String, Object> payload = new HashMap<>();
         payload.put("roomId", roomId);
+        payload.put("roomName", roomName);
         payload.put("items", itemDetails);
         return payload;
     }
