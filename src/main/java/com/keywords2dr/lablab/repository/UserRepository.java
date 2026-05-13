@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -14,6 +15,9 @@ import java.util.UUID;
 public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificationExecutor<User> {
 
     Optional<User> findByUsername(String username);
+
+    // THÊM DÒNG NÀY VÀO
+    List<User> findAllByRole(String role);
 
     @Query("SELECT DISTINCT u FROM User u JOIN u.profile p WHERE p.email = :email")
     Optional<User> findByEmail(@Param("email") String email);
@@ -23,5 +27,4 @@ public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificat
 
     @Query("SELECT COUNT(p) > 0 FROM Profile p WHERE p.phoneNumber = :phoneNumber AND p.user.userId != :excludeUserId")
     boolean existsByPhoneNumberAndUserIdNot(@Param("phoneNumber") String phoneNumber, @Param("excludeUserId") UUID excludeUserId);
-
 }
