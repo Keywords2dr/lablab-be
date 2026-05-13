@@ -1,6 +1,7 @@
 package com.keywords2dr.lablab.service.impl;
 
 import com.keywords2dr.lablab.dto.user.*;
+import com.keywords2dr.lablab.entity.Profile;
 import com.keywords2dr.lablab.entity.User;
 import com.keywords2dr.lablab.exception.BadRequestException;
 import com.keywords2dr.lablab.exception.ConflictException;
@@ -11,6 +12,7 @@ import com.keywords2dr.lablab.repository.specification.UserSpecification;
 import com.keywords2dr.lablab.security.SecurityUtils;
 import com.keywords2dr.lablab.service.UserService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -22,6 +24,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
@@ -29,50 +32,80 @@ public class UserServiceImpl implements UserService {
     private final UserMapper userMapper;
 
     @Override
-    @Transactional(readOnly = true)
-    public ProfileResponse getMyProfile() {
-        UUID currentUserId = currentUserIdOrThrow();
-        User user = findUserById(currentUserId);
-        return userMapper.toProfileResponse(user);
+    @Transactional
+    public UserResponseDTO createUser(UserCreateRequest request) {
+        if (userRepository.existsByUsername(request.getUsername())) {
+            throw new ConflictException("Username '" + request.getUsername() + "' đã tồn tại!");
+        }
+
+        User user = User.builder()
+                .username(request.getUsername().trim())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .role(request.getRole().toUpperCase())
+                .isActive(true)
+                .build();
+
+        Profile profile = Profile.builder()
+                .user(user)
+                .fullName(request.getFullName())
+                .email(request.getUsername().toLowerCase() + "@lablab.local")
+                .phoneNumber("")
+                .faculty(request.getFaculty())
+                .major(request.getMajor())
+                .department(request.getDepartment())
+                .build();
+
+        user.setProfile(profile);
+
+        try {
+            User savedUser = userRepository.save(user);
+            return userMapper.toUserResponse(savedUser);
+        } catch (Exception e) {
+            log.error("Lỗi lưu User: {}", e.getMessage());
+            throw new RuntimeException("Lỗi hệ thống khi tạo người dùng.");
+        }
     }
 
     @Override
     @Transactional
-    public ProfileResponse updateMyProfile(UpdateProfileRequest request) {
-        UUID currentUserId = currentUserIdOrThrow();
-        User user = findUserById(currentUserId);
+    public void resetPassword(UUID userId, String newPassword) {
+        User user = findUserById(userId);
 
-        if (request.getEmail() != null
-                && userRepository.existsByEmailAndUserIdNot(request.getEmail(), currentUserId)) {
-            throw new ConflictException("Email [" + request.getEmail() + "] đã được sử dụng bởi tài khoản khác!");
-        }
-        if (request.getPhoneNumber() != null
-                && userRepository.existsByPhoneNumberAndUserIdNot(request.getPhoneNumber(), currentUserId)) {
-            throw new ConflictException("Số điện thoại [" + request.getPhoneNumber() + "] đã được sử dụng bởi tài khoản khác!");
+        if (newPassword == null || newPassword.trim().isEmpty()) {
+            throw new BadRequestException("Mật khẩu mới không được để trống!");
         }
 
-        userMapper.updateProfileFromRequest(request, user.getProfile());
+        // Lưu mật khẩu mới do Admin nhập từ giao diện
+        user.setPassword(passwordEncoder.encode(newPassword.trim()));
         userRepository.save(user);
-        return userMapper.toProfileResponse(user);
+        log.info("Admin đã đổi mật khẩu cho user: {}", user.getUsername());
     }
 
     @Override
     @Transactional
-    public void changePassword(ChangePasswordRequest request) {
-        UUID currentUserId = currentUserIdOrThrow();
-        User user = findUserById(currentUserId);
+    public UserResponseDTO updateUser(UUID userId, UserUpdateRequest request) {
+        User user = findUserById(userId);
+        if (user.getProfile() == null) {
+            user.setProfile(Profile.builder().user(user).build());
+        }
+        Profile profile = user.getProfile();
 
-        if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
-            throw new BadRequestException("Mật khẩu hiện tại không chính xác!");
-        }
-        if (!request.getNewPassword().equals(request.getConfirmPassword())) {
-            throw new BadRequestException("Mật khẩu xác nhận không trùng khớp!");
-        }
-        if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
-            throw new BadRequestException("Mật khẩu mới không được giống mật khẩu hiện tại!");
-        }
+        if (request.getRole() != null) user.setRole(request.getRole().toUpperCase());
+        if (request.getIsActive() != null) user.setIsActive(request.getIsActive());
+        if (request.getFullName() != null) profile.setFullName(request.getFullName());
+        if (request.getEmail() != null) profile.setEmail(request.getEmail());
+        if (request.getFaculty() != null) profile.setFaculty(request.getFaculty());
+        if (request.getMajor() != null) profile.setMajor(request.getMajor());
+        if (request.getDepartment() != null) profile.setDepartment(request.getDepartment());
 
-        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        return userMapper.toUserResponse(userRepository.save(user));
+    }
+
+    @Override
+    @Transactional
+    public void toggleUserActive(UUID userId) {
+        User user = findUserById(userId);
+        user.setIsActive(!user.getIsActive());
         userRepository.save(user);
     }
 
@@ -85,23 +118,52 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(readOnly = true)
-    public long countUsers(String role, String keyword, Boolean isActive) {
-        Specification<User> spec = UserSpecification.filter(role, keyword, isActive);
-        return userRepository.count(spec);
+    public UserResponseDTO getUserById(UUID userId) {
+        return userMapper.toUserResponse(findUserById(userId));
     }
 
-    // ── helpers ────────────────────────────────────────────────────────────────
+    @Override
+    @Transactional(readOnly = true)
+    public ProfileResponse getMyProfile() {
+        return userMapper.toProfileResponse(findUserById(currentUserIdOrThrow()));
+    }
 
-    private UUID currentUserIdOrThrow() {
-        UUID id = SecurityUtils.getCurrentUserId();
-        if (id == null) {
-            throw new BadRequestException("Không xác định được người dùng hiện tại (Token không hợp lệ)!");
+    @Override
+    @Transactional
+    public ProfileResponse updateMyProfile(UpdateProfileRequest request) {
+        User user = findUserById(currentUserIdOrThrow());
+        if (user.getProfile() == null) {
+            user.setProfile(Profile.builder().user(user).build());
         }
-        return id;
+        userMapper.updateProfileFromRequest(request, user.getProfile());
+        return userMapper.toProfileResponse(userRepository.save(user));
+    }
+
+    @Override
+    @Transactional
+    public void changePassword(ChangePasswordRequest request) {
+        User user = findUserById(currentUserIdOrThrow());
+        if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
+            throw new BadRequestException("Mật khẩu cũ không chính xác!");
+        }
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countUsers(String role, String keyword, Boolean isActive) {
+        return userRepository.count(UserSpecification.filter(role, keyword, isActive));
     }
 
     private User findUserById(UUID id) {
         return userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng!"));
+    }
+
+    private UUID currentUserIdOrThrow() {
+        UUID id = SecurityUtils.getCurrentUserId();
+        if (id == null) throw new BadRequestException("Phiên làm việc hết hạn!");
+        return id;
     }
 }

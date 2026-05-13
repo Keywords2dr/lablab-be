@@ -5,15 +5,13 @@ import com.keywords2dr.lablab.dto.user.UpdateProfileRequest;
 import com.keywords2dr.lablab.dto.user.UserResponseDTO;
 import com.keywords2dr.lablab.entity.Profile;
 import com.keywords2dr.lablab.entity.User;
-import org.mapstruct.BeanMapping;
-import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
-import org.mapstruct.MappingTarget;
-import org.mapstruct.NullValuePropertyMappingStrategy;
+import org.mapstruct.*;
 
 @Mapper(componentModel = "spring")
 public interface UserMapper {
 
+    @Mapping(target = "username",    source = "username")
+    @Mapping(target = "role",        source = "role")
     @Mapping(target = "fullName",    source = "profile.fullName")
     @Mapping(target = "phoneNumber", source = "profile.phoneNumber")
     @Mapping(target = "email",       source = "profile.email")
@@ -23,6 +21,10 @@ public interface UserMapper {
     @Mapping(target = "avatar",      source = "profile.avatar")
     ProfileResponse toProfileResponse(User user);
 
+    @Mapping(target = "userId",      source = "userId")
+    @Mapping(target = "username",    source = "username")
+    @Mapping(target = "role",        source = "role")
+    @Mapping(target = "isActive",    source = "isActive")
     @Mapping(target = "fullName",    source = "profile.fullName")
     @Mapping(target = "phoneNumber", source = "profile.phoneNumber")
     @Mapping(target = "email",       source = "profile.email")
@@ -35,8 +37,6 @@ public interface UserMapper {
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "profileId",  ignore = true)
     @Mapping(target = "user",       ignore = true)
-    @Mapping(target = "faculty",    ignore = true)
-    @Mapping(target = "major",      ignore = true)
-    @Mapping(target = "department", ignore = true)
+        // Đã bỏ ignore faculty, major, department
     void updateProfileFromRequest(UpdateProfileRequest request, @MappingTarget Profile profile);
 }

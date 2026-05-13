@@ -15,6 +15,8 @@ public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificat
 
     Optional<User> findByUsername(String username);
 
+    boolean existsByUsername(String username);
+
     @Query("SELECT DISTINCT u FROM User u JOIN u.profile p WHERE p.email = :email")
     Optional<User> findByEmail(@Param("email") String email);
 

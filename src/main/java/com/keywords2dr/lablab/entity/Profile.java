@@ -1,48 +1,50 @@
 package com.keywords2dr.lablab.entity;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
 import lombok.*;
 import java.util.UUID;
 
 @Entity
-@Table(name = "profiles", uniqueConstraints = {
-        @UniqueConstraint(columnNames = "email",        name = "uk_profiles_email"),
-        @UniqueConstraint(columnNames = "phone_number", name = "uk_profiles_phone_number")
-})
-@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+@Table(name = "profiles")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Profile {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
+    @Column(name = "profile_id")
     private UUID profileId;
 
     @OneToOne
-    @JoinColumn(name = "user_id")
+    @JoinColumn(name = "user_id", referencedColumnName = "user_id")
+    @JsonBackReference
     private User user;
 
-    @Column(length = 100)
+    @Column(name = "full_name")
     private String fullName;
 
-    @Column(name = "phone_number", length = 10)
+    @Column(name = "phone_number", nullable = true)
     private String phoneNumber;
 
-    @NotBlank(message = "Email không được để trống!")
-    @Email(
-            regexp = "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,6}$",
-            message = "Định dạng Email không chính xác (Ví dụ hợp lệ: name@domain.com)!"
-    )
+    @Email(message = "Định dạng Email không chính xác!")
+    @Column(name = "email", nullable = true)
     private String email;
 
-    @Column(length = 100)
+    @Column(name = "faculty", nullable = true)
     private String faculty;
 
-    @Column(length = 100)
+    @Column(name = "major", nullable = true)
     private String major;
 
-    @Column(length = 100)
+    @Column(name = "department", nullable = true)
     private String department;
 
-    @Column(length = 500)
+    @Column(name = "avatar", length = 500)
     private String avatar;
 }
