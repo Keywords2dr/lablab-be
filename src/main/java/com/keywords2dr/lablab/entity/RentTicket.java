@@ -56,7 +56,7 @@ public class RentTicket {
     @Column(nullable = false)
     private LocalDateTime expectedReturnDate;
 
-    private LocalDateTime actualReturnDate;     // Thực tế trả lúc nào
+    private LocalDateTime actualReturnDate;
 
     // Duyệt bởi Teacher (chủ phòng) — bước 1
     @ManyToOne(fetch = FetchType.LAZY)
@@ -72,7 +72,11 @@ public class RentTicket {
 
     private LocalDateTime adminApprovedAt;
 
-    // Từ chối
+    // Từ chối — FIX #2: tách riêng rejectedBy thay vì tái dùng ownerApprovedBy/adminApprovedBy
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "rejected_by")
+    private User rejectedBy;
+
     private String rejectedReason;
     private LocalDateTime rejectedAt;
 

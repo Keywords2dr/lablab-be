@@ -45,7 +45,9 @@ public class RentTicketResponse {
     private String adminApprovedByName;
     private LocalDateTime adminApprovedAt;
 
-    // Từ chối
+    // Từ chối — FIX #2: tách riêng người từ chối
+    private UUID rejectedById;
+    private String rejectedByName;
     private String rejectedReason;
     private LocalDateTime rejectedAt;
 

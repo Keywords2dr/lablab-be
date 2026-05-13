@@ -21,6 +21,8 @@ public interface RoomInventoryRepository extends JpaRepository<RoomInventory, UU
 
     List<RoomInventory> findAllByRoom_RoomId(UUID roomId);
 
+    List<RoomInventory> findAllByRoom_RoomIdAndItem_ItemIdIn(UUID roomId, List<UUID> itemIds);
+
     @Query("""
             SELECT ri FROM RoomInventory ri
             JOIN FETCH ri.item
