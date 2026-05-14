@@ -20,4 +20,11 @@ public class UpdateProfileRequest {
     private String email;
 
     private String avatar;
+
+    private String faculty;
+
+    private String major;
+
+    private String department;
+
 }
