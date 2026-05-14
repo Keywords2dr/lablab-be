@@ -13,7 +13,7 @@ import com.keywords2dr.lablab.repository.*;
 import com.keywords2dr.lablab.repository.specification.RentTicketSpecification;
 import com.keywords2dr.lablab.service.AuditLogService;
 import com.keywords2dr.lablab.service.RentTicketService;
-import com.keywords2dr.lablab.util.UserNameResolver;           // FIX #6
+import com.keywords2dr.lablab.util.UserNameResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -196,7 +196,12 @@ public class RentTicketServiceImpl implements RentTicketService {
         }
 
         if (ticket.getStatus() != TicketStatus.PENDING_OWNER) {
-            throw new BadRequestException("Phiếu không ở trạng thái chờ Teacher duyệt!");
+            throw new BadRequestException(
+                    "Phiếu phải ở trạng thái PENDING_OWNER! Trạng thái hiện tại: " + ticket.getStatus());
+        }
+
+        if (Boolean.FALSE.equals(request.getApproved())) {
+            validateRejectedReason(request.getRejectedReason());
         }
 
         User teacher = userRepository.findById(teacherId)
@@ -205,11 +210,9 @@ public class RentTicketServiceImpl implements RentTicketService {
         RentTicketResponse oldState = rentTicketMapper.toResponse(ticket);
 
         if (Boolean.FALSE.equals(request.getApproved())) {
-            validateRejectedReason(request.getRejectedReason());
             ticket.setStatus(TicketStatus.REJECTED);
             ticket.setRejectedReason(request.getRejectedReason());
             ticket.setRejectedAt(LocalDateTime.now());
-
             ticket.setRejectedBy(teacher);
 
             notifyUser(ticket.getRequester().getUserId(),
@@ -297,7 +300,8 @@ public class RentTicketServiceImpl implements RentTicketService {
         }
 
         if (ticket.getStatus() != TicketStatus.PENDING_RETURN) {
-            throw new BadRequestException("Phiếu không ở trạng thái chờ xác nhận trả!");
+            throw new BadRequestException(
+                    "Phiếu phải ở trạng thái PENDING_RETURN! Trạng thái hiện tại: " + ticket.getStatus());
         }
 
         if (ticket.getTicketType() != TicketType.ROOM_ONLY) {
@@ -316,7 +320,8 @@ public class RentTicketServiceImpl implements RentTicketService {
         rentTicketRepository.save(ticket);
 
         if (ticket.getTicketType() != TicketType.ROOM_ONLY
-                && ticket.getTicketDetails() != null) {
+                && ticket.getTicketDetails() != null
+                && !ticket.getTicketDetails().isEmpty()) {
             processInventoryOnReturn(ticket);
         }
 
@@ -333,13 +338,14 @@ public class RentTicketServiceImpl implements RentTicketService {
             List<RentTicketDetail> problematic = rentTicketDetailRepository
                     .findProblematicDetails(ticketId);
             if (!problematic.isEmpty()) {
-                auditLogService.logAction("RETURN_ISSUE", "RENT_TICKET", ticketId,
-                        newState, buildProblematicPayload(ticket, problematic));
+                String requesterName = (ticket.getRequester() != null)
+                        ? UserNameResolver.resolve(ticket.getRequester())
+                        : "Người dùng không xác định";
 
                 notifyAllAdmins(
                         "Cảnh báo: Vấn đề hóa chất khi trả",
                         String.format("Phiếu mượn của [%s] tại phòng %s có %d hóa chất bị vấn đề khi trả (hỏng/mất/thiếu). Vui lòng kiểm tra.",
-                                UserNameResolver.resolve(ticket.getRequester()),
+                                requesterName,
                                 ticket.getFromRoom().getRoomName(),
                                 problematic.size()),
                         "RETURN_ISSUE_ALERT");
@@ -350,6 +356,9 @@ public class RentTicketServiceImpl implements RentTicketService {
                                 ticket.getFromRoom().getRoomName(),
                                 problematic.size()),
                         "RETURN_ISSUE_REQUESTER");
+
+                auditLogService.logAction("RETURN_ISSUE", "RENT_TICKET", ticketId,
+                        newState, buildProblematicPayload(ticket, problematic));
             }
         }
 
@@ -382,7 +391,12 @@ public class RentTicketServiceImpl implements RentTicketService {
         RentTicket ticket = findTicketById(ticketId);
 
         if (ticket.getStatus() != TicketStatus.PENDING_ADMIN) {
-            throw new BadRequestException("Phiếu không ở trạng thái chờ Admin duyệt!");
+            throw new BadRequestException(
+                    "Phiếu phải ở trạng thái PENDING_ADMIN! Trạng thái hiện tại: " + ticket.getStatus());
+        }
+
+        if (Boolean.FALSE.equals(request.getApproved())) {
+            validateRejectedReason(request.getRejectedReason());
         }
 
         User admin = userRepository.findById(adminId)
@@ -391,11 +405,9 @@ public class RentTicketServiceImpl implements RentTicketService {
         RentTicketResponse oldState = rentTicketMapper.toResponse(ticket);
 
         if (Boolean.FALSE.equals(request.getApproved())) {
-            validateRejectedReason(request.getRejectedReason());
             ticket.setStatus(TicketStatus.REJECTED);
             ticket.setRejectedReason(request.getRejectedReason());
             ticket.setRejectedAt(LocalDateTime.now());
-
             ticket.setRejectedBy(admin);
 
             notifyUser(ticket.getRequester().getUserId(),
@@ -459,12 +471,10 @@ public class RentTicketServiceImpl implements RentTicketService {
                     .map(ReturnTicketDetailRequest::getDetailId)
                     .collect(Collectors.toSet());
 
-            Set<UUID> expectedDetailIds = details.stream()
+            Set<UUID> missing = details.stream()
                     .map(RentTicketDetail::getDetailId)
+                    .filter(id -> !submittedDetailIds.contains(id))
                     .collect(Collectors.toSet());
-
-            Set<UUID> missing = new HashSet<>(expectedDetailIds);
-            missing.removeAll(submittedDetailIds);
 
             if (!missing.isEmpty()) {
                 throw new BadRequestException(
@@ -506,6 +516,10 @@ public class RentTicketServiceImpl implements RentTicketService {
         if (!StringUtils.hasText(reason)) {
             throw new BadRequestException("Vui lòng nhập lý do từ chối!");
         }
+    }
+
+    private boolean hasNoDetails(RentTicket ticket) {
+        return ticket.getTicketDetails() == null || ticket.getTicketDetails().isEmpty();
     }
 
     private List<RentTicketDetail> buildTicketDetails(
@@ -564,19 +578,22 @@ public class RentTicketServiceImpl implements RentTicketService {
         return details;
     }
 
-    private void lockInventory(RentTicket ticket) {
-        if (ticket.getTicketDetails() == null || ticket.getTicketDetails().isEmpty()) return;
-
+    private Map<UUID, RoomInventory> loadInventoryMap(RentTicket ticket) {
         List<UUID> itemIds = ticket.getTicketDetails().stream()
                 .map(d -> d.getItem().getItemId())
                 .collect(Collectors.toList());
 
-        Map<UUID, RoomInventory> inventoryMap =
-                roomInventoryRepository.findAllByRoom_RoomIdAndItem_ItemIdIn(
-                                ticket.getFromRoom().getRoomId(), itemIds).stream()
-                        .collect(Collectors.toMap(
-                                inv -> inv.getItem().getItemId(),
-                                Function.identity()));
+        return roomInventoryRepository.findAllByRoom_RoomIdAndItem_ItemIdIn(
+                        ticket.getFromRoom().getRoomId(), itemIds).stream()
+                .collect(Collectors.toMap(
+                        inv -> inv.getItem().getItemId(),
+                        Function.identity()));
+    }
+
+    private void lockInventory(RentTicket ticket) {
+        if (hasNoDetails(ticket)) return;
+
+        Map<UUID, RoomInventory> inventoryMap = loadInventoryMap(ticket);
 
         for (RentTicketDetail detail : ticket.getTicketDetails()) {
             RoomInventory inventory = inventoryMap.get(detail.getItem().getItemId());
@@ -600,17 +617,11 @@ public class RentTicketServiceImpl implements RentTicketService {
         roomInventoryRepository.saveAll(inventoryMap.values());
     }
 
-    private void processInventoryOnReturn(RentTicket ticket) {
-        List<UUID> itemIds = ticket.getTicketDetails().stream()
-                .map(d -> d.getItem().getItemId())
-                .collect(Collectors.toList());
 
-        Map<UUID, RoomInventory> inventoryMap =
-                roomInventoryRepository.findAllByRoom_RoomIdAndItem_ItemIdIn(
-                                ticket.getFromRoom().getRoomId(), itemIds).stream()
-                        .collect(Collectors.toMap(
-                                inv -> inv.getItem().getItemId(),
-                                Function.identity()));
+    private void processInventoryOnReturn(RentTicket ticket) {
+        if (hasNoDetails(ticket)) return;
+
+        Map<UUID, RoomInventory> inventoryMap = loadInventoryMap(ticket);
 
         for (RentTicketDetail detail : ticket.getTicketDetails()) {
             RoomInventory inventory = inventoryMap.get(detail.getItem().getItemId());

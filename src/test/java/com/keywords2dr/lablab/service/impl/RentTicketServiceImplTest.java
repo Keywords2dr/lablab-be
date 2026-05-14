@@ -54,7 +54,9 @@ class RentTicketServiceImplTest {
     @Mock AuditLogService            auditLogService;
     @Mock ApplicationEventPublisher  eventPublisher;
 
-    @InjectMocks RentTicketServiceImpl service;
+    // KHÔNG dùng @InjectMocks — inject thủ công trong @BeforeEach để đảm bảo
+    // đúng mock được truyền vào đúng field, tránh Mockito inject sai thứ tự.
+    RentTicketServiceImpl service;
 
     // ── Fixtures ───────────────────────────────────────────────────────────────
     UUID userId, ticketId, roomId, teacherId, adminId, itemId;
@@ -103,6 +105,19 @@ class RentTicketServiceImplTest {
         ticketResp.setTicketId(ticketId);
         summaryResp = new RentTicketSummaryResponse();
         summaryResp.setTicketId(ticketId);
+
+        // ── Inject thủ công: chắc chắn đúng mock → đúng field ────────────────
+        service = new RentTicketServiceImpl(
+                rentTicketRepository,
+                rentTicketDetailRepository,
+                roomRepository,
+                userRepository,
+                itemRepository,
+                roomInventoryRepository,
+                rentTicketMapper,
+                auditLogService,
+                eventPublisher
+        );
     }
 
     // =========================================================================
@@ -717,8 +732,7 @@ class RentTicketServiceImplTest {
                     ticketId, ReturnStatus.NOT_RETURNED)).thenReturn(false);
             when(rentTicketDetailRepository.findProblematicDetails(ticketId))
                     .thenReturn(Collections.emptyList());
-            when(roomInventoryRepository.findAllByRoom_RoomIdAndItem_ItemIdIn(any(), any()))
-                    .thenReturn(Collections.emptyList());
+            // FIX: bỏ stub roomInventoryRepository — không còn được gọi khi ticketDetails rỗng
             when(rentTicketMapper.toResponse(any())).thenReturn(ticketResp);
 
             service.teacherConfirmReturn(ticketId, teacherId);
@@ -765,8 +779,6 @@ class RentTicketServiceImplTest {
         @Test
         @DisplayName("TC48 · Có hóa chất DAMAGED khi trả — notify admin + notify requester")
         void tc48_problematicItems_notifyBoth() {
-            // NOTE: production code phải gọi publishEvent ít nhất 2 lần:
-            //   1 lần cho admin, 1 lần cho requester khi có problematic items
             ticket.setStatus(TicketStatus.PENDING_RETURN);
             ticket.setTicketType(TicketType.CHEMICAL_ONLY);
             ticket.setTicketDetails(new ArrayList<>());
@@ -776,17 +788,17 @@ class RentTicketServiceImplTest {
             RentTicketDetail damaged = buildDetail(UUID.randomUUID());
             damaged.setReturnStatus(ReturnStatus.DAMAGED);
             damaged.setReturnNote("Bình bị vỡ");
+            damaged.setQuantityReturned(BigDecimal.ZERO);
             when(rentTicketDetailRepository.findProblematicDetails(ticketId))
                     .thenReturn(List.of(damaged));
-            when(roomInventoryRepository.findAllByRoom_RoomIdAndItem_ItemIdIn(any(), any()))
-                    .thenReturn(Collections.emptyList());
             when(userRepository.findAllByRole("ADMIN")).thenReturn(List.of(admin));
             when(rentTicketMapper.toResponse(any())).thenReturn(ticketResp);
 
-            service.teacherConfirmReturn(ticketId, teacherId);
+            // assertThatCode bắt exception thật — nếu fail sẽ thấy rõ nguyên nhân thay vì bị che
+            assertThatCode(() -> service.teacherConfirmReturn(ticketId, teacherId))
+                    .doesNotThrowAnyException();
 
             verify(userRepository).findAllByRole("ADMIN");
-            // notify admin + notify requester => ít nhất 2 lần publish event
             verify(eventPublisher, atLeast(2)).publishEvent(any());
         }
     }
