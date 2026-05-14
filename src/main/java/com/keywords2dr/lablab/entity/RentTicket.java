@@ -72,7 +72,7 @@ public class RentTicket {
 
     private LocalDateTime adminApprovedAt;
 
-    // Từ chối — FIX #2: tách riêng rejectedBy thay vì tái dùng ownerApprovedBy/adminApprovedBy
+    // Từ chối
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "rejected_by")
     private User rejectedBy;

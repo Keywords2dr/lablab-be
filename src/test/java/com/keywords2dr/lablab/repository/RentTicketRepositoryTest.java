@@ -59,8 +59,16 @@ class RentTicketRepositoryTest {
 
     @Test
     void findAll_WithSpecification_FiltersCorrectly() {
-        Room room1 = roomRepository.save(new Room(null, "Room 1", null, true, null, null));
-        Room room2 = roomRepository.save(new Room(null, "Room 2", null, true, null, null));
+        Room room1 = new Room();
+        room1.setRoomName("Room 1");
+        room1.setIsActive(true);
+        room1 = roomRepository.save(room1);
+
+        Room room2 = new Room();
+        room2.setRoomName("Room 2");
+        room2.setIsActive(true);
+        room2 = roomRepository.save(room2);
+
         User user = userRepository.save(new User());
 
         RentTicket ticket = new RentTicket();

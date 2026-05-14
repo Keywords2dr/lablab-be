@@ -104,11 +104,19 @@ public class RentTicketServiceImpl implements RentTicketService {
             savedTicket.setTicketDetails(details);
         }
 
-        notifyRoomStaff(room,
-                "Phiếu mượn mới",
-                String.format("[%s] vừa tạo phiếu mượn %s tại phòng %s. Vui lòng xem xét và duyệt.",
-                        UserNameResolver.resolve(requester), ticketType.name(), room.getRoomName()),
-                "TICKET_CREATED");
+        if (room.getStaffAssignments() == null || room.getStaffAssignments().isEmpty()) {
+            notifyAllAdmins(
+                    "Phiếu mượn mới (phòng chưa có staff)",
+                    String.format("[%s] vừa tạo phiếu mượn %s tại phòng %s nhưng phòng chưa có staff phụ trách. Vui lòng xem xét.",
+                            UserNameResolver.resolve(requester), ticketType.name(), room.getRoomName()),
+                    "TICKET_CREATED_NO_STAFF");
+        } else {
+            notifyRoomStaff(room,
+                    "Phiếu mượn mới",
+                    String.format("[%s] vừa tạo phiếu mượn %s tại phòng %s. Vui lòng xem xét và duyệt.",
+                            UserNameResolver.resolve(requester), ticketType.name(), room.getRoomName()),
+                    "TICKET_CREATED");
+        }
 
         RentTicketResponse newState = rentTicketMapper.toResponse(savedTicket);
         auditLogService.logAction("CREATE", "RENT_TICKET", savedTicket.getTicketId(),
@@ -141,6 +149,12 @@ public class RentTicketServiceImpl implements RentTicketService {
                         UserNameResolver.resolve(ticket.getRequester()),
                         ticket.getFromRoom().getRoomName()),
                 "TICKET_CANCELLED");
+
+        notifyUser(ticket.getRequester().getUserId(),
+                "Hủy phiếu mượn thành công",
+                String.format("Phiếu mượn tại phòng %s của bạn đã được hủy thành công.",
+                        ticket.getFromRoom().getRoomName()),
+                "TICKET_CANCELLED_CONFIRMATION");
 
         RentTicketResponse newState = rentTicketMapper.toResponse(ticket);
         auditLogService.logAction("CANCEL", "RENT_TICKET", ticketId, oldState, newState);
@@ -202,7 +216,7 @@ public class RentTicketServiceImpl implements RentTicketService {
                     "Phiếu mượn bị từ chối",
                     String.format("Phiếu mượn tại phòng %s đã bị Teacher từ chối. Lý do: %s",
                             ticket.getFromRoom().getRoomName(), request.getRejectedReason()),
-                    "TICKET_REJECTED");
+                    "TICKET_REJECTED_BY_TEACHER");
         } else {
             ticket.setOwnerApprovedBy(teacher);
             ticket.setOwnerApprovedAt(LocalDateTime.now());
@@ -221,6 +235,13 @@ public class RentTicketServiceImpl implements RentTicketService {
                         String.format("Teacher đã duyệt phiếu mượn tại phòng %s. Đang chờ Admin xác nhận.",
                                 ticket.getFromRoom().getRoomName()),
                         "TICKET_PENDING_ADMIN");
+
+                notifyAllAdmins(
+                        "Phiếu mượn chờ duyệt",
+                        String.format("Phiếu mượn của [%s] tại phòng %s đã được Teacher duyệt. Vui lòng xem xét và phê duyệt.",
+                                UserNameResolver.resolve(ticket.getRequester()),
+                                ticket.getFromRoom().getRoomName()),
+                        "TICKET_PENDING_ADMIN_ALERT");
             }
         }
 
@@ -314,6 +335,21 @@ public class RentTicketServiceImpl implements RentTicketService {
             if (!problematic.isEmpty()) {
                 auditLogService.logAction("RETURN_ISSUE", "RENT_TICKET", ticketId,
                         newState, buildProblematicPayload(ticket, problematic));
+
+                notifyAllAdmins(
+                        "Cảnh báo: Vấn đề hóa chất khi trả",
+                        String.format("Phiếu mượn của [%s] tại phòng %s có %d hóa chất bị vấn đề khi trả (hỏng/mất/thiếu). Vui lòng kiểm tra.",
+                                UserNameResolver.resolve(ticket.getRequester()),
+                                ticket.getFromRoom().getRoomName(),
+                                problematic.size()),
+                        "RETURN_ISSUE_ALERT");
+
+                notifyUser(ticket.getRequester().getUserId(),
+                        "Ghi nhận vấn đề khi trả đồ",
+                        String.format("Phiếu mượn tại phòng %s đã được xác nhận trả, nhưng có %d hóa chất được ghi nhận là hỏng/mất/thiếu. Vui lòng liên hệ quản lý để biết thêm chi tiết.",
+                                ticket.getFromRoom().getRoomName(),
+                                problematic.size()),
+                        "RETURN_ISSUE_REQUESTER");
             }
         }
 
@@ -366,7 +402,7 @@ public class RentTicketServiceImpl implements RentTicketService {
                     "Phiếu mượn bị từ chối",
                     String.format("Admin đã từ chối phiếu mượn tại phòng %s. Lý do: %s",
                             ticket.getFromRoom().getRoomName(), request.getRejectedReason()),
-                    "TICKET_REJECTED");
+                    "TICKET_REJECTED_BY_ADMIN");
         } else {
             ticket.setStatus(TicketStatus.APPROVED);
             ticket.setAdminApprovedBy(admin);
@@ -661,6 +697,12 @@ public class RentTicketServiceImpl implements RentTicketService {
                 .requesterName(UserNameResolver.resolve(ticket.getRequester()))
                 .issues(issues)
                 .build();
+    }
+
+    private void notifyAllAdmins(String title, String message, String type) {
+        userRepository.findAllByRole("ADMIN")
+                .forEach(admin -> eventPublisher.publishEvent(
+                        new NotificationEvent(admin.getUserId(), title, message, type)));
     }
 
     private void notifyRoomStaff(Room room, String title, String message, String type) {
