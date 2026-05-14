@@ -26,12 +26,12 @@ import static org.mockito.Mockito.*;
 
 /**
  * ┌─────────────────────────────────────────────────────────────────┐
- * │  RentTicketServiceImplTest  —  55 test cases / 8 nhóm          │
+ * │  RentTicketServiceImplTest  —  53 test cases / 8 nhóm          │
  * │                                                                 │
- * │  Nhóm 1 · createTicket        · 12 cases                       │
+ * │  Nhóm 1 · createTicket        · 11 cases                       │
  * │  Nhóm 2 · cancelTicket        ·  7 cases                       │
  * │  Nhóm 3 · getTicketById       ·  2 cases                       │
- * │  Nhóm 4 · teacherApprove      ·  9 cases                       │
+ * │  Nhóm 4 · teacherApprove      ·  8 cases                       │
  * │  Nhóm 5 · activateTicket      ·  3 cases                       │
  * │  Nhóm 6 · requestReturn       ·  9 cases                       │
  * │  Nhóm 7 · teacherConfirmReturn·  6 cases                       │
@@ -54,8 +54,6 @@ class RentTicketServiceImplTest {
     @Mock AuditLogService            auditLogService;
     @Mock ApplicationEventPublisher  eventPublisher;
 
-    // KHÔNG dùng @InjectMocks — inject thủ công trong @BeforeEach để đảm bảo
-    // đúng mock được truyền vào đúng field, tránh Mockito inject sai thứ tự.
     RentTicketServiceImpl service;
 
     // ── Fixtures ───────────────────────────────────────────────────────────────
@@ -79,7 +77,6 @@ class RentTicketServiceImplTest {
         teacher   = mockUser(teacherId, "teacher01");
         admin     = mockUser(adminId,   "admin01");
 
-        // ── Dùng RoomStaffAssignment — đúng với entity trong project ──────────
         RoomStaffAssignment sa = new RoomStaffAssignment();
         sa.setUser(teacher);
 
@@ -106,7 +103,6 @@ class RentTicketServiceImplTest {
         summaryResp = new RentTicketSummaryResponse();
         summaryResp.setTicketId(ticketId);
 
-        // ── Inject thủ công: chắc chắn đúng mock → đúng field ────────────────
         service = new RentTicketServiceImpl(
                 rentTicketRepository,
                 rentTicketDetailRepository,
@@ -121,13 +117,11 @@ class RentTicketServiceImplTest {
     }
 
     // =========================================================================
-    // Nhóm 1 · createTicket — 12 cases
+    // Nhóm 1 · createTicket — 11 cases
     // =========================================================================
     @Nested
     @DisplayName("Nhóm 1 · createTicket()")
     class CreateTicket {
-
-        // ── Happy paths ────────────────────────────────────────────────────────
 
         @Test
         @DisplayName("TC01 · ROOM_ONLY — thành công, không lưu detail, check conflict phòng")
@@ -162,25 +156,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC03 · ROOM_AND_CHEMICAL — thành công, check conflict VÀ lưu detail")
-        void tc03_roomAndChemical_success() {
-            stubUserAndRoom();
-            when(rentTicketRepository.existsConflictingBooking(any(), any(), any())).thenReturn(false);
-            when(rentTicketRepository.save(any())).thenReturn(ticket);
-            when(itemRepository.findAllById(any())).thenReturn(List.of(activeItem()));
-            when(roomInventoryRepository.findAllByRoom_RoomIdAndItem_ItemIdIn(any(), any()))
-                    .thenReturn(List.of(inventory()));
-            when(rentTicketMapper.toResponse(any())).thenReturn(ticketResp);
-
-            service.createTicket(userId, createReq(TicketType.ROOM_AND_CHEMICAL, List.of(detailReq())));
-
-            verify(rentTicketRepository).existsConflictingBooking(any(), any(), any());
-            verify(rentTicketDetailRepository).saveAll(anyList());
-        }
-
-        @Test
-        @DisplayName("TC04 · Phòng không có staff — notify ADMIN thay vì notify staff")
-        void tc04_noStaff_notifyAdmins() {
+        @DisplayName("TC03 · Phòng không có staff — notify ADMIN thay vì notify staff")
+        void tc03_noStaff_notifyAdmins() {
             room.setStaffAssignments(Collections.emptyList());
             stubUserAndRoom();
             when(rentTicketRepository.existsConflictingBooking(any(), any(), any())).thenReturn(false);
@@ -193,11 +170,9 @@ class RentTicketServiceImplTest {
             verify(userRepository).findAllByRole("ADMIN");
         }
 
-        // ── Sad paths ──────────────────────────────────────────────────────────
-
         @Test
-        @DisplayName("TC05 · Người dùng không tồn tại — ResourceNotFoundException")
-        void tc05_userNotFound() {
+        @DisplayName("TC04 · Người dùng không tồn tại — ResourceNotFoundException")
+        void tc04_userNotFound() {
             when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.createTicket(userId, createReq(TicketType.ROOM_ONLY, null)))
@@ -205,8 +180,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC06 · Phòng không tồn tại — ResourceNotFoundException")
-        void tc06_roomNotFound() {
+        @DisplayName("TC05 · Phòng không tồn tại — ResourceNotFoundException")
+        void tc05_roomNotFound() {
             when(userRepository.findById(userId)).thenReturn(Optional.of(requester));
             when(roomRepository.findById(roomId)).thenReturn(Optional.empty());
 
@@ -215,8 +190,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC07 · Phòng bị khóa (isActive=false) — BadRequestException chứa 'khóa'")
-        void tc07_roomInactive() {
+        @DisplayName("TC06 · Phòng bị khóa (isActive=false) — BadRequestException chứa 'khóa'")
+        void tc06_roomInactive() {
             room.setIsActive(false);
             when(userRepository.findById(userId)).thenReturn(Optional.of(requester));
             when(roomRepository.findById(roomId)).thenReturn(Optional.of(room));
@@ -227,8 +202,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC08 · borrowDate >= expectedReturnDate — BadRequestException chứa 'thời gian'")
-        void tc08_invalidDateRange() {
+        @DisplayName("TC07 · borrowDate >= expectedReturnDate — BadRequestException chứa 'thời gian'")
+        void tc07_invalidDateRange() {
             RentTicketCreateRequest req = createReq(TicketType.ROOM_ONLY, null);
             req.setBorrowDate(LocalDateTime.now().plusHours(5));
             req.setExpectedReturnDate(LocalDateTime.now().plusHours(2));
@@ -241,8 +216,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC09 · ticketType không hợp lệ — BadRequestException chứa 'không hợp lệ'")
-        void tc09_invalidTicketType() {
+        @DisplayName("TC08 · ticketType không hợp lệ — BadRequestException chứa 'không hợp lệ'")
+        void tc08_invalidTicketType() {
             RentTicketCreateRequest req = createReq(TicketType.ROOM_ONLY, null);
             req.setTicketType("GARBAGE_TYPE");
             when(userRepository.findById(userId)).thenReturn(Optional.of(requester));
@@ -254,8 +229,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC10 · CHEMICAL_ONLY items rỗng — BadRequestException chứa 'hóa chất'")
-        void tc10_chemicalOnly_emptyItems() {
+        @DisplayName("TC09 · CHEMICAL_ONLY items rỗng — BadRequestException chứa 'hóa chất'")
+        void tc09_chemicalOnly_emptyItems() {
             when(userRepository.findById(userId)).thenReturn(Optional.of(requester));
             when(roomRepository.findById(roomId)).thenReturn(Optional.of(room));
 
@@ -266,8 +241,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC11 · ROOM_ONLY trùng lịch phòng — BadRequestException, không gọi save")
-        void tc11_conflictingBooking() {
+        @DisplayName("TC10 · ROOM_ONLY trùng lịch phòng — BadRequestException, không gọi save")
+        void tc10_conflictingBooking() {
             stubUserAndRoom();
             when(rentTicketRepository.existsConflictingBooking(eq(roomId), any(), any())).thenReturn(true);
 
@@ -278,8 +253,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC12 · Item đã bị xóa — BadRequestException chứa 'đã bị xóa'")
-        void tc12_itemDeleted() {
+        @DisplayName("TC11 · Item đã bị xóa — BadRequestException chứa 'đã bị xóa'")
+        void tc11_itemDeleted() {
             stubUserAndRoom();
             when(rentTicketRepository.save(any())).thenReturn(ticket);
             Item deleted = activeItem();
@@ -301,8 +276,8 @@ class RentTicketServiceImplTest {
     class CancelTicket {
 
         @Test
-        @DisplayName("TC13 · PENDING_OWNER — hủy thành công → CANCELLED")
-        void tc13_pendingOwner_success() {
+        @DisplayName("TC12 · PENDING_OWNER — hủy thành công → CANCELLED")
+        void tc12_pendingOwner_success() {
             stubFindTicket();
             when(rentTicketMapper.toResponse(any())).thenReturn(ticketResp);
 
@@ -313,8 +288,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC14 · PENDING_ADMIN — hủy thành công → CANCELLED")
-        void tc14_pendingAdmin_success() {
+        @DisplayName("TC13 · PENDING_ADMIN — hủy thành công → CANCELLED")
+        void tc13_pendingAdmin_success() {
             ticket.setStatus(TicketStatus.PENDING_ADMIN);
             stubFindTicket();
             when(rentTicketMapper.toResponse(any())).thenReturn(ticketResp);
@@ -325,8 +300,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC15 · Phiếu không tồn tại — ResourceNotFoundException")
-        void tc15_ticketNotFound() {
+        @DisplayName("TC14 · Phiếu không tồn tại — ResourceNotFoundException")
+        void tc14_ticketNotFound() {
             when(rentTicketRepository.findById(ticketId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.cancelTicket(ticketId, userId))
@@ -334,8 +309,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC16 · Người dùng khác hủy — BadRequestException chứa 'quyền'")
-        void tc16_wrongUser() {
+        @DisplayName("TC15 · Người dùng khác hủy — BadRequestException chứa 'quyền'")
+        void tc15_wrongUser() {
             stubFindTicket();
 
             assertThatThrownBy(() -> service.cancelTicket(ticketId, UUID.randomUUID()))
@@ -344,8 +319,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC17 · Phiếu đã APPROVED — BadRequestException chứa 'chờ duyệt'")
-        void tc17_approvedStatus() {
+        @DisplayName("TC16 · Phiếu đã APPROVED — BadRequestException chứa 'chờ duyệt'")
+        void tc16_approvedStatus() {
             ticket.setStatus(TicketStatus.APPROVED);
             stubFindTicket();
 
@@ -355,8 +330,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC18 · Phiếu BORROWED — BadRequestException (không thể hủy khi đang mượn)")
-        void tc18_borrowedStatus() {
+        @DisplayName("TC17 · Phiếu BORROWED — BadRequestException (không thể hủy khi đang mượn)")
+        void tc17_borrowedStatus() {
             ticket.setStatus(TicketStatus.BORROWED);
             stubFindTicket();
 
@@ -365,8 +340,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC19 · Phiếu RETURNED — BadRequestException (không thể hủy sau khi đã trả)")
-        void tc19_returnedStatus() {
+        @DisplayName("TC18 · Phiếu RETURNED — BadRequestException (không thể hủy sau khi đã trả)")
+        void tc18_returnedStatus() {
             ticket.setStatus(TicketStatus.RETURNED);
             stubFindTicket();
 
@@ -383,8 +358,8 @@ class RentTicketServiceImplTest {
     class GetTicketById {
 
         @Test
-        @DisplayName("TC20 · Tìm thấy — trả về response đúng")
-        void tc20_found() {
+        @DisplayName("TC19 · Tìm thấy — trả về response đúng")
+        void tc19_found() {
             when(rentTicketRepository.findById(ticketId)).thenReturn(Optional.of(ticket));
             when(rentTicketMapper.toResponse(ticket)).thenReturn(ticketResp);
 
@@ -392,8 +367,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC21 · Không tìm thấy — ResourceNotFoundException")
-        void tc21_notFound() {
+        @DisplayName("TC20 · Không tìm thấy — ResourceNotFoundException")
+        void tc20_notFound() {
             when(rentTicketRepository.findById(ticketId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.getTicketById(ticketId))
@@ -402,15 +377,15 @@ class RentTicketServiceImplTest {
     }
 
     // =========================================================================
-    // Nhóm 4 · teacherApprove — 9 cases
+    // Nhóm 4 · teacherApprove — 8 cases
     // =========================================================================
     @Nested
     @DisplayName("Nhóm 4 · teacherApprove()")
     class TeacherApprove {
 
         @Test
-        @DisplayName("TC22 · ROOM_ONLY — duyệt → APPROVED trực tiếp, ghi ownerApprovedBy + At")
-        void tc22_roomOnly_approved() {
+        @DisplayName("TC21 · ROOM_ONLY — duyệt → APPROVED trực tiếp, ghi ownerApprovedBy + At")
+        void tc21_roomOnly_approved() {
             stubFindTicket();
             when(userRepository.findById(teacherId)).thenReturn(Optional.of(teacher));
             when(rentTicketMapper.toResponse(any())).thenReturn(ticketResp);
@@ -423,8 +398,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC23 · CHEMICAL_ONLY — duyệt → PENDING_ADMIN, notify admin")
-        void tc23_chemicalOnly_pendingAdmin() {
+        @DisplayName("TC22 · CHEMICAL_ONLY — duyệt → PENDING_ADMIN, notify admin")
+        void tc22_chemicalOnly_pendingAdmin() {
             ticket.setTicketType(TicketType.CHEMICAL_ONLY);
             stubFindTicket();
             when(userRepository.findById(teacherId)).thenReturn(Optional.of(teacher));
@@ -438,22 +413,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC24 · ROOM_AND_CHEMICAL — duyệt → PENDING_ADMIN")
-        void tc24_roomAndChemical_pendingAdmin() {
-            ticket.setTicketType(TicketType.ROOM_AND_CHEMICAL);
-            stubFindTicket();
-            when(userRepository.findById(teacherId)).thenReturn(Optional.of(teacher));
-            when(userRepository.findAllByRole("ADMIN")).thenReturn(List.of(admin));
-            when(rentTicketMapper.toResponse(any())).thenReturn(ticketResp);
-
-            service.teacherApprove(ticketId, teacherId, approveReq(true, null));
-
-            assertThat(ticket.getStatus()).isEqualTo(TicketStatus.PENDING_ADMIN);
-        }
-
-        @Test
-        @DisplayName("TC25 · Từ chối có lý do — REJECTED, lưu rejectedBy=teacher, reason, rejectedAt")
-        void tc25_reject_withReason() {
+        @DisplayName("TC23 · Từ chối có lý do — REJECTED, lưu rejectedBy=teacher, reason, rejectedAt")
+        void tc23_reject_withReason() {
             stubFindTicket();
             when(userRepository.findById(teacherId)).thenReturn(Optional.of(teacher));
             when(rentTicketMapper.toResponse(any())).thenReturn(ticketResp);
@@ -467,9 +428,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC26 · Từ chối không có lý do (null) — BadRequestException chứa 'lý do'")
-        void tc26_reject_nullReason() {
-            // NOTE: production code phải check reason TRƯỚC khi gọi userRepository.findById()
+        @DisplayName("TC24 · Từ chối không có lý do (null) — BadRequestException chứa 'lý do'")
+        void tc24_reject_nullReason() {
             stubFindTicket();
 
             assertThatThrownBy(() -> service.teacherApprove(ticketId, teacherId, approveReq(false, null)))
@@ -478,9 +438,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC27 · Từ chối lý do blank/trắng — BadRequestException")
-        void tc27_reject_blankReason() {
-            // NOTE: production code phải check reason TRƯỚC khi gọi userRepository.findById()
+        @DisplayName("TC25 · Từ chối lý do blank/trắng — BadRequestException")
+        void tc25_reject_blankReason() {
             stubFindTicket();
 
             assertThatThrownBy(() -> service.teacherApprove(ticketId, teacherId, approveReq(false, "   ")))
@@ -488,9 +447,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC28 · Phiếu không ở PENDING_OWNER — BadRequestException chứa 'PENDING_OWNER'")
-        void tc28_wrongStatus() {
-            // NOTE: production code phải check status TRƯỚC khi gọi userRepository.findById()
+        @DisplayName("TC26 · Phiếu không ở PENDING_OWNER — BadRequestException chứa 'PENDING_OWNER'")
+        void tc26_wrongStatus() {
             ticket.setStatus(TicketStatus.APPROVED);
             stubFindTicket();
 
@@ -500,8 +458,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC29 · Teacher không phụ trách phòng — BadRequestException chứa 'quyền'")
-        void tc29_notRoomOwner() {
+        @DisplayName("TC27 · Teacher không phụ trách phòng — BadRequestException chứa 'quyền'")
+        void tc27_notRoomOwner() {
             stubFindTicket();
 
             assertThatThrownBy(() -> service.teacherApprove(ticketId, UUID.randomUUID(), approveReq(true, null)))
@@ -510,8 +468,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC30 · Phòng không có staff, teacher bất kỳ duyệt — BadRequestException")
-        void tc30_roomNoStaff_anyTeacherBlocked() {
+        @DisplayName("TC28 · Phòng không có staff, teacher bất kỳ duyệt — BadRequestException")
+        void tc28_roomNoStaff_anyTeacherBlocked() {
             room.setStaffAssignments(Collections.emptyList());
             stubFindTicket();
 
@@ -529,8 +487,8 @@ class RentTicketServiceImplTest {
     class ActivateTicket {
 
         @Test
-        @DisplayName("TC31 · APPROVED → BORROWED thành công")
-        void tc31_approved_toBorrowed() {
+        @DisplayName("TC29 · APPROVED → BORROWED thành công")
+        void tc29_approved_toBorrowed() {
             ticket.setStatus(TicketStatus.APPROVED);
             stubFindTicket();
             when(rentTicketMapper.toResponse(any())).thenReturn(ticketResp);
@@ -541,8 +499,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC32 · Phiếu không ở APPROVED — BadRequestException chứa 'APPROVED'")
-        void tc32_wrongStatus() {
+        @DisplayName("TC30 · Phiếu không ở APPROVED — BadRequestException chứa 'APPROVED'")
+        void tc30_wrongStatus() {
             ticket.setStatus(TicketStatus.PENDING_OWNER);
             stubFindTicket();
 
@@ -552,8 +510,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC33 · Teacher không phụ trách phòng — BadRequestException chứa 'quyền'")
-        void tc33_notRoomOwner() {
+        @DisplayName("TC31 · Teacher không phụ trách phòng — BadRequestException chứa 'quyền'")
+        void tc31_notRoomOwner() {
             ticket.setStatus(TicketStatus.APPROVED);
             stubFindTicket();
 
@@ -571,8 +529,8 @@ class RentTicketServiceImplTest {
     class RequestReturn {
 
         @Test
-        @DisplayName("TC34 · ROOM_ONLY BORROWED — trả thành công → PENDING_RETURN")
-        void tc34_roomOnly_success() {
+        @DisplayName("TC32 · ROOM_ONLY BORROWED — trả thành công → PENDING_RETURN")
+        void tc32_roomOnly_success() {
             ticket.setStatus(TicketStatus.BORROWED);
             stubFindTicket();
             when(rentTicketMapper.toResponse(any())).thenReturn(ticketResp);
@@ -583,8 +541,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC35 · CHEMICAL_ONLY — đủ tất cả detail, RETURNED → PENDING_RETURN")
-        void tc35_chemicalOnly_allDetails_success() {
+        @DisplayName("TC33 · CHEMICAL_ONLY — đủ tất cả detail, RETURNED → PENDING_RETURN")
+        void tc33_chemicalOnly_allDetails_success() {
             UUID dId = UUID.randomUUID();
             RentTicketDetail detail = buildDetail(dId);
             ticket.setStatus(TicketStatus.BORROWED);
@@ -601,8 +559,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC36 · Người dùng khác yêu cầu trả — BadRequestException chứa 'quyền'")
-        void tc36_wrongUser() {
+        @DisplayName("TC34 · Người dùng khác yêu cầu trả — BadRequestException chứa 'quyền'")
+        void tc34_wrongUser() {
             ticket.setStatus(TicketStatus.BORROWED);
             stubFindTicket();
 
@@ -612,8 +570,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC37 · Phiếu không BORROWED — BadRequestException chứa 'BORROWED'")
-        void tc37_notBorrowed() {
+        @DisplayName("TC35 · Phiếu không BORROWED — BadRequestException chứa 'BORROWED'")
+        void tc35_notBorrowed() {
             ticket.setStatus(TicketStatus.APPROVED);
             stubFindTicket();
 
@@ -623,8 +581,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC38 · CHEMICAL_ONLY — items null — BadRequestException")
-        void tc38_chemicalOnly_nullItems() {
+        @DisplayName("TC36 · CHEMICAL_ONLY — items null — BadRequestException")
+        void tc36_chemicalOnly_nullItems() {
             ticket.setStatus(TicketStatus.BORROWED);
             ticket.setTicketType(TicketType.CHEMICAL_ONLY);
             ticket.setTicketDetails(List.of(buildDetail(UUID.randomUUID())));
@@ -635,15 +593,14 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC39 · CHEMICAL_ONLY — thiếu detail của 1 item — BadRequestException chứa 'Thiếu'")
-        void tc39_chemicalOnly_missingDetail() {
+        @DisplayName("TC37 · CHEMICAL_ONLY — thiếu detail của 1 item — BadRequestException chứa 'Thiếu'")
+        void tc37_chemicalOnly_missingDetail() {
             UUID d1 = UUID.randomUUID(), d2 = UUID.randomUUID();
             ticket.setStatus(TicketStatus.BORROWED);
             ticket.setTicketType(TicketType.CHEMICAL_ONLY);
             ticket.setTicketDetails(new ArrayList<>(List.of(buildDetail(d1), buildDetail(d2))));
             stubFindTicket();
 
-            // Chỉ gửi d1, thiếu d2
             assertThatThrownBy(() -> service.requestReturn(ticketId, userId,
                     returnReq(List.of(returnDetailReq(d1, "RETURNED", null)))))
                     .isInstanceOf(BadRequestException.class)
@@ -651,8 +608,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC40 · returnStatus DAMAGED không có note — BadRequestException chứa 'ghi chú'")
-        void tc40_damaged_noNote() {
+        @DisplayName("TC38 · returnStatus DAMAGED không có note — BadRequestException chứa 'ghi chú'")
+        void tc38_damaged_noNote() {
             UUID dId = UUID.randomUUID();
             RentTicketDetail detail = buildDetail(dId);
             ticket.setStatus(TicketStatus.BORROWED);
@@ -668,8 +625,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC41 · returnStatus LOST — note blank — BadRequestException")
-        void tc41_lost_blankNote() {
+        @DisplayName("TC39 · returnStatus LOST — note blank — BadRequestException")
+        void tc39_lost_blankNote() {
             UUID dId = UUID.randomUUID();
             RentTicketDetail detail = buildDetail(dId);
             ticket.setStatus(TicketStatus.BORROWED);
@@ -684,8 +641,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC42 · returnStatus không hợp lệ — BadRequestException chứa 'không hợp lệ'")
-        void tc42_invalidReturnStatus() {
+        @DisplayName("TC40 · returnStatus không hợp lệ — BadRequestException chứa 'không hợp lệ'")
+        void tc40_invalidReturnStatus() {
             UUID dId = UUID.randomUUID();
             RentTicketDetail detail = buildDetail(dId);
             ticket.setStatus(TicketStatus.BORROWED);
@@ -709,8 +666,8 @@ class RentTicketServiceImplTest {
     class TeacherConfirmReturn {
 
         @Test
-        @DisplayName("TC43 · ROOM_ONLY PENDING_RETURN → RETURNED, ghi actualReturnDate")
-        void tc43_roomOnly_success() {
+        @DisplayName("TC41 · ROOM_ONLY PENDING_RETURN → RETURNED, ghi actualReturnDate")
+        void tc41_roomOnly_success() {
             ticket.setStatus(TicketStatus.PENDING_RETURN);
             stubFindTicket();
             when(rentTicketMapper.toResponse(any())).thenReturn(ticketResp);
@@ -722,8 +679,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC44 · CHEMICAL_ONLY — tất cả đã cập nhật returnStatus, không có vấn đề → RETURNED")
-        void tc44_chemicalOnly_allOk() {
+        @DisplayName("TC42 · CHEMICAL_ONLY — tất cả đã cập nhật returnStatus, không có vấn đề → RETURNED")
+        void tc42_chemicalOnly_allOk() {
             ticket.setStatus(TicketStatus.PENDING_RETURN);
             ticket.setTicketType(TicketType.CHEMICAL_ONLY);
             ticket.setTicketDetails(new ArrayList<>());
@@ -732,7 +689,6 @@ class RentTicketServiceImplTest {
                     ticketId, ReturnStatus.NOT_RETURNED)).thenReturn(false);
             when(rentTicketDetailRepository.findProblematicDetails(ticketId))
                     .thenReturn(Collections.emptyList());
-            // FIX: bỏ stub roomInventoryRepository — không còn được gọi khi ticketDetails rỗng
             when(rentTicketMapper.toResponse(any())).thenReturn(ticketResp);
 
             service.teacherConfirmReturn(ticketId, teacherId);
@@ -741,8 +697,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC45 · CHEMICAL_ONLY — còn NOT_RETURNED — BadRequestException chứa 'chưa được cập nhật'")
-        void tc45_chemicalOnly_hasUnreturned() {
+        @DisplayName("TC43 · CHEMICAL_ONLY — còn NOT_RETURNED — BadRequestException chứa 'chưa được cập nhật'")
+        void tc43_chemicalOnly_hasUnreturned() {
             ticket.setStatus(TicketStatus.PENDING_RETURN);
             ticket.setTicketType(TicketType.CHEMICAL_ONLY);
             stubFindTicket();
@@ -755,8 +711,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC46 · Phiếu không PENDING_RETURN — BadRequestException chứa 'PENDING_RETURN'")
-        void tc46_wrongStatus() {
+        @DisplayName("TC44 · Phiếu không PENDING_RETURN — BadRequestException chứa 'PENDING_RETURN'")
+        void tc44_wrongStatus() {
             ticket.setStatus(TicketStatus.BORROWED);
             stubFindTicket();
 
@@ -766,8 +722,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC47 · Teacher không phụ trách phòng — BadRequestException chứa 'quyền'")
-        void tc47_notRoomOwner() {
+        @DisplayName("TC45 · Teacher không phụ trách phòng — BadRequestException chứa 'quyền'")
+        void tc45_notRoomOwner() {
             ticket.setStatus(TicketStatus.PENDING_RETURN);
             stubFindTicket();
 
@@ -777,8 +733,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC48 · Có hóa chất DAMAGED khi trả — notify admin + notify requester")
-        void tc48_problematicItems_notifyBoth() {
+        @DisplayName("TC46 · Có hóa chất DAMAGED khi trả — notify admin + notify requester")
+        void tc46_problematicItems_notifyBoth() {
             ticket.setStatus(TicketStatus.PENDING_RETURN);
             ticket.setTicketType(TicketType.CHEMICAL_ONLY);
             ticket.setTicketDetails(new ArrayList<>());
@@ -794,7 +750,6 @@ class RentTicketServiceImplTest {
             when(userRepository.findAllByRole("ADMIN")).thenReturn(List.of(admin));
             when(rentTicketMapper.toResponse(any())).thenReturn(ticketResp);
 
-            // assertThatCode bắt exception thật — nếu fail sẽ thấy rõ nguyên nhân thay vì bị che
             assertThatCode(() -> service.teacherConfirmReturn(ticketId, teacherId))
                     .doesNotThrowAnyException();
 
@@ -811,11 +766,11 @@ class RentTicketServiceImplTest {
     class AdminApprove {
 
         @Test
-        @DisplayName("TC49 · PENDING_ADMIN — duyệt → APPROVED, ghi adminApprovedBy + At")
-        void tc49_approve_success() {
+        @DisplayName("TC47 · PENDING_ADMIN — duyệt → APPROVED, ghi adminApprovedBy + At")
+        void tc47_approve_success() {
             ticket.setStatus(TicketStatus.PENDING_ADMIN);
             ticket.setTicketType(TicketType.CHEMICAL_ONLY);
-            ticket.setTicketDetails(new ArrayList<>()); // list rỗng → không cần stub roomInventoryRepository
+            ticket.setTicketDetails(new ArrayList<>());
             stubFindTicket();
             when(userRepository.findById(adminId)).thenReturn(Optional.of(admin));
             when(rentTicketMapper.toResponse(any())).thenReturn(ticketResp);
@@ -828,8 +783,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC50 · Từ chối có lý do — REJECTED, rejectedBy=admin, không gọi lockInventory")
-        void tc50_reject_withReason() {
+        @DisplayName("TC48 · Từ chối có lý do — REJECTED, rejectedBy=admin, không gọi lockInventory")
+        void tc48_reject_withReason() {
             ticket.setStatus(TicketStatus.PENDING_ADMIN);
             stubFindTicket();
             when(userRepository.findById(adminId)).thenReturn(Optional.of(admin));
@@ -840,13 +795,12 @@ class RentTicketServiceImplTest {
             assertThat(ticket.getStatus()).isEqualTo(TicketStatus.REJECTED);
             assertThat(ticket.getRejectedBy()).isEqualTo(admin);
             assertThat(ticket.getRejectedReason()).isEqualTo("Vượt quota hóa chất");
-            verify(roomInventoryRepository, never()).saveAll(any()); // không lock inventory
+            verify(roomInventoryRepository, never()).saveAll(any());
         }
 
         @Test
-        @DisplayName("TC51 · Từ chối không có lý do — BadRequestException chứa 'lý do'")
-        void tc51_reject_noReason() {
-            // NOTE: production code phải check reason TRƯỚC khi gọi userRepository.findById()
+        @DisplayName("TC49 · Từ chối không có lý do — BadRequestException chứa 'lý do'")
+        void tc49_reject_noReason() {
             ticket.setStatus(TicketStatus.PENDING_ADMIN);
             stubFindTicket();
 
@@ -856,9 +810,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC52 · Phiếu không PENDING_ADMIN — BadRequestException chứa 'PENDING_ADMIN'")
-        void tc52_wrongStatus() {
-            // NOTE: production code phải check status TRƯỚC khi gọi userRepository.findById()
+        @DisplayName("TC50 · Phiếu không PENDING_ADMIN — BadRequestException chứa 'PENDING_ADMIN'")
+        void tc50_wrongStatus() {
             ticket.setStatus(TicketStatus.PENDING_OWNER);
             stubFindTicket();
 
@@ -868,8 +821,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC53 · Admin không tồn tại — ResourceNotFoundException")
-        void tc53_adminNotFound() {
+        @DisplayName("TC51 · Admin không tồn tại — ResourceNotFoundException")
+        void tc51_adminNotFound() {
             ticket.setStatus(TicketStatus.PENDING_ADMIN);
             stubFindTicket();
             when(userRepository.findById(adminId)).thenReturn(Optional.empty());
@@ -879,8 +832,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC54 · Duyệt nhưng tồn kho không đủ để lock — BadRequestException chứa 'không đủ số lượng'")
-        void tc54_approve_insufficientInventory() {
+        @DisplayName("TC52 · Duyệt nhưng tồn kho không đủ để lock — BadRequestException chứa 'không đủ số lượng'")
+        void tc52_approve_insufficientInventory() {
             RentTicketDetail detail = buildDetail(UUID.randomUUID());
             detail.setQuantityBorrowed(new BigDecimal("999"));
             ticket.setStatus(TicketStatus.PENDING_ADMIN);
@@ -890,7 +843,7 @@ class RentTicketServiceImplTest {
             when(userRepository.findById(adminId)).thenReturn(Optional.of(admin));
             RoomInventory inv = inventory();
             inv.setTotalQuantity(BigDecimal.ONE);
-            inv.setLockedQuantity(BigDecimal.ONE); // available = 0
+            inv.setLockedQuantity(BigDecimal.ONE);
             when(roomInventoryRepository.findAllByRoom_RoomIdAndItem_ItemIdIn(any(), any()))
                     .thenReturn(List.of(inv));
 
@@ -900,8 +853,8 @@ class RentTicketServiceImplTest {
         }
 
         @Test
-        @DisplayName("TC55 · Duyệt thành công — gọi saveAll để cập nhật lockedQuantity")
-        void tc55_approve_callsSaveAllInventory() {
+        @DisplayName("TC53 · Duyệt thành công — gọi saveAll để cập nhật lockedQuantity")
+        void tc53_approve_callsSaveAllInventory() {
             RentTicketDetail detail = buildDetail(UUID.randomUUID());
             detail.setQuantityBorrowed(new BigDecimal("5"));
             ticket.setStatus(TicketStatus.PENDING_ADMIN);
@@ -910,12 +863,12 @@ class RentTicketServiceImplTest {
             stubFindTicket();
             when(userRepository.findById(adminId)).thenReturn(Optional.of(admin));
             when(roomInventoryRepository.findAllByRoom_RoomIdAndItem_ItemIdIn(any(), any()))
-                    .thenReturn(List.of(inventory())); // available = 100
+                    .thenReturn(List.of(inventory()));
             when(rentTicketMapper.toResponse(any())).thenReturn(ticketResp);
 
             service.adminApprove(ticketId, adminId, approveReq(true, null));
 
-            verify(roomInventoryRepository).saveAll(any()); // lock inventory phải được gọi
+            verify(roomInventoryRepository).saveAll(any());
         }
     }
 
@@ -923,13 +876,11 @@ class RentTicketServiceImplTest {
     // Private helpers
     // =========================================================================
 
-    /** Stub findById + save cho ticket fixture */
     private void stubFindTicket() {
         when(rentTicketRepository.findById(ticketId)).thenReturn(Optional.of(ticket));
         lenient().when(rentTicketRepository.save(any())).thenReturn(ticket);
     }
 
-    /** Stub userRepository + roomRepository với userId và roomId fixture */
     private void stubUserAndRoom() {
         when(userRepository.findById(userId)).thenReturn(Optional.of(requester));
         when(roomRepository.findById(roomId)).thenReturn(Optional.of(room));

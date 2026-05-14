@@ -37,6 +37,5 @@ public interface UserMapper {
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "profileId",  ignore = true)
     @Mapping(target = "user",       ignore = true)
-        // Đã bỏ ignore faculty, major, department
     void updateProfileFromRequest(UpdateProfileRequest request, @MappingTarget Profile profile);
 }

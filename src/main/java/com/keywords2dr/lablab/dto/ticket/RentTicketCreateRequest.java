@@ -17,7 +17,7 @@ public class RentTicketCreateRequest {
     private UUID roomId;
 
     @NotBlank(message = "Loại phiếu không được để trống!")
-    private String ticketType;      // ROOM_ONLY | CHEMICAL_ONLY | ROOM_AND_CHEMICAL
+    private String ticketType;      // ROOM_ONLY | CHEMICAL_ONLY
 
     // Thông tin mục đích
     private String purposeType;     // TEACHING | RESEARCH | PERSONAL | OTHER

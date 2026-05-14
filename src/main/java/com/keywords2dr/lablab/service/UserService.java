@@ -8,7 +8,6 @@ import java.util.UUID;
 
 public interface UserService {
 
-    // ==================== PHẦN CŨ ====================
     void changePassword(ChangePasswordRequest request);
 
     ProfileResponse getMyProfile();
@@ -19,10 +18,9 @@ public interface UserService {
 
     long countUsers(String role, String keyword, Boolean isActive);
 
-    // ==================== PHẦN MỚI CHO QUẢN LÝ NGƯỜI DÙNG ====================
     UserResponseDTO createUser(UserCreateRequest request);
 
-    UserResponseDTO getUserById(UUID userId);           // Dùng UserResponseDTO thay vì UserDetailResponse
+    UserResponseDTO getUserById(UUID userId);
 
     UserResponseDTO updateUser(UUID userId, UserUpdateRequest request);
 

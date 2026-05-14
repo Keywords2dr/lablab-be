@@ -35,8 +35,6 @@ public class UserServiceImpl implements UserService {
     private final UserMapper userMapper;
     private final AuditLogService auditLogService;
 
-    // ==================== QUẢN LÝ NGƯỜI DÙNG (ADMIN) ====================
-
     @Override
     @Transactional
     public UserResponseDTO createUser(UserCreateRequest request) {
@@ -130,8 +128,6 @@ public class UserServiceImpl implements UserService {
         auditLogService.logAction("RESET_PASSWORD", "USER", userId, "Mật khẩu cũ", "Đã đặt lại mật khẩu mới");
     }
 
-    // ==================== CÁ NHÂN HÓA (USER) ====================
-
     @Override
     @Transactional(readOnly = true)
     public ProfileResponse getMyProfile() {
@@ -166,8 +162,6 @@ public class UserServiceImpl implements UserService {
         userRepository.save(user);
         auditLogService.logAction("CHANGE_PASSWORD", "USER", user.getUserId(), "Mật khẩu cũ", "Đã đổi mật khẩu cá nhân");
     }
-
-    // ==================== TRUY VẤN DỮ LIỆU ====================
 
     @Override
     @Transactional(readOnly = true)

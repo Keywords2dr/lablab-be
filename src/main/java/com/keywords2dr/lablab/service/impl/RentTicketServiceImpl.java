@@ -68,18 +68,20 @@ public class RentTicketServiceImpl implements RentTicketService {
             throw new BadRequestException("Loại phiếu không hợp lệ: " + request.getTicketType());
         }
 
-        if (ticketType != TicketType.ROOM_ONLY) {
-            if (request.getItems() == null || request.getItems().isEmpty()) {
-                throw new BadRequestException("Phiếu mượn hóa chất phải có ít nhất 1 hóa chất!");
+        if (ticketType == TicketType.ROOM_ONLY) {
+            if (request.getItems() != null && !request.getItems().isEmpty()) {
+                throw new BadRequestException("Phiếu mượn phòng không được kèm theo hóa chất/vật tư!");
             }
-        }
 
-        if (ticketType != TicketType.CHEMICAL_ONLY) {
             boolean hasConflict = rentTicketRepository.existsConflictingBooking(
                     room.getRoomId(), request.getBorrowDate(), request.getExpectedReturnDate());
             if (hasConflict) {
                 throw new BadRequestException(
                         "Phòng [" + room.getRoomName() + "] đã có lịch mượn trong khoảng thời gian này!");
+            }
+        } else if (ticketType == TicketType.CHEMICAL_ONLY) {
+            if (request.getItems() == null || request.getItems().isEmpty()) {
+                throw new BadRequestException("Phiếu mượn hóa chất phải có ít nhất 1 hóa chất!");
             }
         }
 
@@ -98,7 +100,7 @@ public class RentTicketServiceImpl implements RentTicketService {
 
         RentTicket savedTicket = rentTicketRepository.save(ticket);
 
-        if (ticketType != TicketType.ROOM_ONLY && request.getItems() != null) {
+        if (ticketType == TicketType.CHEMICAL_ONLY) {
             List<RentTicketDetail> details = buildTicketDetails(savedTicket, request.getItems(), room);
             rentTicketDetailRepository.saveAll(details);
             savedTicket.setTicketDetails(details);
@@ -278,7 +280,7 @@ public class RentTicketServiceImpl implements RentTicketService {
 
         notifyUser(ticket.getRequester().getUserId(),
                 "Đồ đã được bàn giao",
-                String.format("Teacher đã bàn giao đồ cho bạn tại phòng %s. "
+                String.format("Teacher đã bàn giao yêu cầu cho bạn tại phòng %s. "
                                 + "Vui lòng yêu cầu trả khi hoàn tất sử dụng.",
                         ticket.getFromRoom().getRoomName()),
                 "TICKET_BORROWED");
@@ -326,8 +328,8 @@ public class RentTicketServiceImpl implements RentTicketService {
         }
 
         notifyUser(ticket.getRequester().getUserId(),
-                "Trả đồ thành công",
-                String.format("Teacher đã xác nhận nhận lại đồ tại phòng %s.",
+                "Trả thành công",
+                String.format("Teacher đã xác nhận nhận lại yêu cầu tại phòng %s.",
                         ticket.getFromRoom().getRoomName()),
                 "TICKET_RETURNED");
 
@@ -495,7 +497,7 @@ public class RentTicketServiceImpl implements RentTicketService {
 
         notifyRoomStaff(ticket.getFromRoom(),
                 "Yêu cầu trả đồ",
-                String.format("[%s] đã yêu cầu trả đồ tại phòng %s. Vui lòng xác nhận.",
+                String.format("[%s] đã yêu cầu trả tại phòng %s. Vui lòng xác nhận.",
                         UserNameResolver.resolve(ticket.getRequester()),
                         ticket.getFromRoom().getRoomName()),
                 "TICKET_PENDING_RETURN");
