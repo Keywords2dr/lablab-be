@@ -53,6 +53,17 @@ public class RentTicketController {
         return ResponseEntity.ok(ticketService.getMyTickets(SecurityUtils.getCurrentUserId(), pageable));
     }
 
+    @GetMapping("/my/filter")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER')")
+    public ResponseEntity<Page<RentTicketSummaryResponse>> getMyTicketsByStatus(
+            @RequestParam TicketStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        return ResponseEntity.ok(
+                ticketService.getMyTicketsByStatus(SecurityUtils.getCurrentUserId(), status, pageable));
+    }
+
     @PutMapping("/{id}/request-return")
     @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER')")
     public ResponseEntity<RentTicketResponse> requestReturn(
@@ -87,6 +98,18 @@ public class RentTicketController {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         return ResponseEntity.ok(
                 ticketService.getAllTicketsForTeacher(SecurityUtils.getCurrentUserId(), pageable));
+    }
+
+    @GetMapping("/teacher/filter")
+    @PreAuthorize("hasRole('TEACHER')")
+    public ResponseEntity<Page<RentTicketSummaryResponse>> teacherFilterByStatus(
+            @RequestParam TicketStatus status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        return ResponseEntity.ok(
+                ticketService.getTicketsByStatusForTeacher(
+                        SecurityUtils.getCurrentUserId(), status, pageable));
     }
 
     @PutMapping("/{id}/teacher-approve")

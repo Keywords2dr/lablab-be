@@ -2,8 +2,11 @@ package com.keywords2dr.lablab.controller;
 
 import com.keywords2dr.lablab.dto.room.RoomRequestDTO;
 import com.keywords2dr.lablab.dto.room.RoomResponseDTO;
+import com.keywords2dr.lablab.dto.room.RoomStaffResponseDTO;
 import com.keywords2dr.lablab.dto.room.RoomStatsDTO;
+import com.keywords2dr.lablab.security.SecurityUtils;
 import com.keywords2dr.lablab.service.RoomService;
+import com.keywords2dr.lablab.service.RoomStaffAssignmentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -15,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -25,6 +29,7 @@ import java.util.UUID;
 public class RoomController {
 
     private final RoomService roomService;
+    private final RoomStaffAssignmentService roomStaffAssignmentService; // Thêm service này
 
     @PostMapping
     public ResponseEntity<RoomResponseDTO> createRoom(@Valid @RequestBody RoomRequestDTO request) {
@@ -43,6 +48,13 @@ public class RoomController {
             @PathVariable UUID id,
             @RequestParam boolean isActive) {
         return ResponseEntity.ok(Map.of("message", roomService.changeRoomStatus(id, isActive)));
+    }
+
+    @GetMapping("/my-rooms")
+    @PreAuthorize("hasAnyRole('TEACHER', 'ADMIN')")
+    public ResponseEntity<List<RoomStaffResponseDTO>> getMyManagedRooms() {
+        UUID currentUserId = SecurityUtils.getCurrentUserId();
+        return ResponseEntity.ok(roomStaffAssignmentService.getRoomsByStaff(currentUserId));
     }
 
     @GetMapping("/{id}")

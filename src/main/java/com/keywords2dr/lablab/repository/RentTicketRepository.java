@@ -19,7 +19,6 @@ public interface RentTicketRepository extends JpaRepository<RentTicket, UUID>,
 
     /**
      * Lấy danh sách phiếu đang chờ Teacher duyệt của phòng mà Teacher đó quản lý.
-     * Teacher chỉ thấy phiếu thuộc phòng mình được gán.
      */
     @Query("""
             SELECT t FROM RentTicket t
@@ -32,8 +31,7 @@ public interface RentTicketRepository extends JpaRepository<RentTicket, UUID>,
     List<RentTicket> findPendingTicketsByTeacher(@Param("teacherId") UUID teacherId);
 
     /**
-     * Lấy toàn bộ phiếu của phòng mà Teacher quản lý (tất cả trạng thái),
-     * dùng để Teacher xem lịch sử phiếu phòng mình.
+     * Lấy toàn bộ phiếu của phòng mà Teacher quản lý (tất cả trạng thái), có phân trang.
      */
     @Query("""
             SELECT t FROM RentTicket t
@@ -46,19 +44,28 @@ public interface RentTicketRepository extends JpaRepository<RentTicket, UUID>,
             @Param("teacherId") UUID teacherId,
             Pageable pageable);
 
+    /**
+     * Lọc phiếu theo status cho Teacher — chỉ phiếu thuộc phòng mình quản lý.
+     */
+    @Query("""
+            SELECT t FROM RentTicket t
+            JOIN t.fromRoom r
+            JOIN r.staffAssignments sa
+            WHERE sa.user.userId = :teacherId
+              AND t.status = :status
+            ORDER BY t.createdAt DESC
+            """)
+    Page<RentTicket> findTicketsByTeacherAndStatus(
+            @Param("teacherId") UUID teacherId,
+            @Param("status") TicketStatus status,
+            Pageable pageable);
+
     // ── ADMIN ─────────────────────────────────────────────────────────────────
 
     /**
      * Lấy danh sách phiếu đang chờ Admin duyệt (sau khi Teacher đã duyệt).
-     * Chỉ áp dụng cho CHEMICAL_ONLY và ROOM_AND_CHEMICAL.
      */
     List<RentTicket> findAllByStatusOrderByCreatedAtDesc(TicketStatus status);
-
-    /**
-     * Admin lấy tất cả phiếu, có filter theo roomId và status — dùng kết hợp
-     * với RentTicketSpecification để build dynamic query.
-     * JpaSpecificationExecutor đã cover case này qua findAll(spec, pageable).
-     */
 
     // ── REQUESTER (Student / Teacher xem phiếu của chính mình) ───────────────
 
@@ -70,7 +77,15 @@ public interface RentTicketRepository extends JpaRepository<RentTicket, UUID>,
             Pageable pageable);
 
     /**
-     * Lấy phiếu của người tạo theo trạng thái cụ thể.
+     * Lọc phiếu của người tạo theo trạng thái, có phân trang.
+     */
+    Page<RentTicket> findAllByRequester_UserIdAndStatusOrderByCreatedAtDesc(
+            UUID requesterId,
+            TicketStatus status,
+            Pageable pageable);
+
+    /**
+     * Lấy phiếu của người tạo theo trạng thái cụ thể (list, không phân trang).
      */
     List<RentTicket> findAllByRequester_UserIdAndStatus(
             UUID requesterId,

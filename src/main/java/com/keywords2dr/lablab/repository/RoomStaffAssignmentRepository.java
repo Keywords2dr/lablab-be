@@ -18,4 +18,6 @@ public interface RoomStaffAssignmentRepository extends JpaRepository<RoomStaffAs
     Optional<RoomStaffAssignment> findByRoom_RoomIdAndUser_UserId(UUID roomId, UUID userId);
 
     boolean existsByUser_UserId(UUID userId);
+
+    List<RoomStaffAssignment> findAllByUser_UserId(UUID userId);
 }

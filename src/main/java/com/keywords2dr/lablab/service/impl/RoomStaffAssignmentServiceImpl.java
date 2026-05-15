@@ -131,4 +131,13 @@ public class RoomStaffAssignmentServiceImpl implements RoomStaffAssignmentServic
                 "ROOM_REMOVE"
         ));
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RoomStaffResponseDTO> getRoomsByStaff(UUID userId) {
+        return roomStaffAssignmentRepository.findAllByUser_UserId(userId)
+                .stream()
+                .map(roomStaffAssignmentMapper::toResponse)
+                .toList();
+    }
 }

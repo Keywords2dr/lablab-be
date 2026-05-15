@@ -21,6 +21,11 @@ public interface RentTicketService {
 
     List<RentTicketSummaryResponse> getPendingTicketsForTeacher(UUID teacherId);
     Page<RentTicketSummaryResponse> getAllTicketsForTeacher(UUID teacherId, Pageable pageable);
+
+    /** Lọc phiếu theo status cho Teacher (chỉ phiếu thuộc phòng mình quản lý) */
+    Page<RentTicketSummaryResponse> getTicketsByStatusForTeacher(
+            UUID teacherId, TicketStatus status, Pageable pageable);
+
     RentTicketResponse teacherApprove(UUID ticketId, UUID teacherId, RentTicketApproveRequest request);
 
     /** Teacher xác nhận đã bàn giao đồ (APPROVED → BORROWED) */
@@ -44,6 +49,10 @@ public interface RentTicketService {
     // ── REQUESTER (Student / Teacher xem phiếu của mình) ─────────────────────
 
     Page<RentTicketSummaryResponse> getMyTickets(UUID requesterId, Pageable pageable);
+
+    /** Lọc phiếu của chính mình theo status */
+    Page<RentTicketSummaryResponse> getMyTicketsByStatus(
+            UUID requesterId, TicketStatus status, Pageable pageable);
 
     /** Người mượn yêu cầu trả (BORROWED → PENDING_RETURN) */
     RentTicketResponse requestReturn(UUID ticketId, UUID requesterId, ReturnTicketRequest request);

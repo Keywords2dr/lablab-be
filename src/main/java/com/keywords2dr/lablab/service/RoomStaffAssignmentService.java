@@ -12,4 +12,5 @@ public interface RoomStaffAssignmentService {
     RoomStaffResponseDTO assignStaff(UUID roomId, AssignStaffRequestDTO request);
     void removeStaff(UUID roomId, UUID userId);
     List<UserResponseDTO> getAssignableTeachers(UUID roomId, String keyword);
+    List<RoomStaffResponseDTO> getRoomsByStaff(UUID userId);
 }

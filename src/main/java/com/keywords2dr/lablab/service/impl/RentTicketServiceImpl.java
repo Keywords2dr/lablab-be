@@ -231,31 +231,40 @@ public class RentTicketServiceImpl implements RentTicketService {
 
             notifyUser(ticket.getRequester().getUserId(),
                     "Phiếu mượn bị từ chối",
-                    String.format("Phiếu mượn tại phòng %s đã bị Teacher từ chối. Lý do: %s",
-                            ticket.getFromRoom().getRoomName(), request.getRejectedReason()),
+                    String.format("Phiếu mượn tại phòng %s đã bị Teacher [%s] từ chối. Lý do: %s",
+                            ticket.getFromRoom().getRoomName(),
+                            UserNameResolver.resolve(teacher),
+                            request.getRejectedReason()),
                     "TICKET_REJECTED_BY_TEACHER");
+
         } else {
             ticket.setOwnerApprovedBy(teacher);
             ticket.setOwnerApprovedAt(LocalDateTime.now());
 
             if (ticket.getTicketType() == TicketType.ROOM_ONLY) {
                 ticket.setStatus(TicketStatus.APPROVED);
+
                 notifyUser(ticket.getRequester().getUserId(),
                         "Phiếu mượn được duyệt",
-                        String.format("Phiếu mượn phòng %s đã được Teacher duyệt.",
+                        String.format("Teacher [%s] đã duyệt phiếu mượn phòng %s của bạn. Bạn có thể đến nhận.",
+                                UserNameResolver.resolve(teacher),
                                 ticket.getFromRoom().getRoomName()),
                         "TICKET_APPROVED");
+
             } else {
                 ticket.setStatus(TicketStatus.PENDING_ADMIN);
+
                 notifyUser(ticket.getRequester().getUserId(),
                         "Phiếu mượn đang chờ Admin duyệt",
-                        String.format("Teacher đã duyệt phiếu mượn tại phòng %s. Đang chờ Admin xác nhận.",
+                        String.format("Teacher [%s] đã duyệt phiếu mượn tại phòng %s. Đang chờ Admin xác nhận.",
+                                UserNameResolver.resolve(teacher),
                                 ticket.getFromRoom().getRoomName()),
                         "TICKET_PENDING_ADMIN");
 
                 notifyAllAdmins(
                         "Phiếu mượn chờ duyệt",
-                        String.format("Phiếu mượn của [%s] tại phòng %s đã được Teacher duyệt. Vui lòng xem xét và phê duyệt.",
+                        String.format("Teacher [%s] đã duyệt phiếu mượn của [%s] tại phòng %s. Vui lòng xem xét và phê duyệt.",
+                                UserNameResolver.resolve(teacher),
                                 UserNameResolver.resolve(ticket.getRequester()),
                                 ticket.getFromRoom().getRoomName()),
                         "TICKET_PENDING_ADMIN_ALERT");
@@ -379,6 +388,14 @@ public class RentTicketServiceImpl implements RentTicketService {
         return newState;
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Page<RentTicketSummaryResponse> getTicketsByStatusForTeacher(
+            UUID teacherId, TicketStatus status, Pageable pageable) {
+        return rentTicketRepository.findTicketsByTeacherAndStatus(teacherId, status, pageable)
+                .map(rentTicketMapper::toSummaryResponse);
+    }
+
     // ── ADMIN ─────────────────────────────────────────────────────────────────
 
     @Override
@@ -428,23 +445,48 @@ public class RentTicketServiceImpl implements RentTicketService {
                 unlockInventory(ticket);
             }
 
+            String roomName = ticket.getFromRoom().getRoomName();
+            String rejectedReason = request.getRejectedReason();
+
             notifyUser(ticket.getRequester().getUserId(),
                     "Phiếu mượn bị từ chối",
                     String.format("Admin đã từ chối phiếu mượn tại phòng %s. Lý do: %s",
-                            ticket.getFromRoom().getRoomName(), request.getRejectedReason()),
+                            roomName, rejectedReason),
                     "TICKET_REJECTED_BY_ADMIN");
+
+            if (ticket.getOwnerApprovedBy() != null) {
+                notifyUser(ticket.getOwnerApprovedBy().getUserId(),
+                        "Phiếu bạn đã duyệt bị Admin từ chối",
+                        String.format("Admin đã từ chối phiếu mượn của [%s] tại phòng %s mà bạn đã duyệt trước đó. Lý do: %s",
+                                UserNameResolver.resolve(ticket.getRequester()),
+                                roomName, rejectedReason),
+                        "TICKET_REJECTED_BY_ADMIN_NOTIFY_TEACHER");
+            }
+
         } else {
+            // ── ADMIN DUYỆT ──────────────────────────────────────────────────────
             ticket.setStatus(TicketStatus.APPROVED);
             ticket.setAdminApprovedBy(admin);
             ticket.setAdminApprovedAt(LocalDateTime.now());
 
             validateInventoryOnApprove(ticket);
 
+            String roomName = ticket.getFromRoom().getRoomName();
+
             notifyUser(ticket.getRequester().getUserId(),
                     "Phiếu mượn được duyệt",
                     String.format("Admin đã duyệt phiếu mượn tại phòng %s. Bạn có thể đến nhận đồ.",
-                            ticket.getFromRoom().getRoomName()),
+                            roomName),
                     "TICKET_APPROVED");
+
+            if (ticket.getOwnerApprovedBy() != null) {
+                notifyUser(ticket.getOwnerApprovedBy().getUserId(),
+                        "Phiếu bạn đã duyệt được Admin thông qua",
+                        String.format("Admin đã phê duyệt phiếu mượn của [%s] tại phòng %s mà bạn đã duyệt trước đó. Phiếu đã được kích hoạt.",
+                                UserNameResolver.resolve(ticket.getRequester()),
+                                roomName),
+                        "TICKET_APPROVED_NOTIFY_TEACHER");
+            }
         }
 
         rentTicketRepository.save(ticket);
@@ -521,6 +563,15 @@ public class RentTicketServiceImpl implements RentTicketService {
         RentTicketResponse newState = rentTicketMapper.toResponse(ticket);
         auditLogService.logAction("REQUEST_RETURN", "RENT_TICKET", ticketId, oldState, newState);
         return newState;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<RentTicketSummaryResponse> getMyTicketsByStatus(
+            UUID requesterId, TicketStatus status, Pageable pageable) {
+        return rentTicketRepository
+                .findAllByRequester_UserIdAndStatusOrderByCreatedAtDesc(requesterId, status, pageable)
+                .map(rentTicketMapper::toSummaryResponse);
     }
 
     // ── PRIVATE HELPERS ───────────────────────────────────────────────────────
