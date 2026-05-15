@@ -1,6 +1,7 @@
 package com.keywords2dr.lablab.repository;
 
 import com.keywords2dr.lablab.entity.RoomInventory;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -19,6 +20,7 @@ public interface RoomInventoryRepository extends JpaRepository<RoomInventory, UU
 
     Optional<RoomInventory> findByRoom_RoomIdAndItem_ItemId(UUID roomId, UUID itemId);
 
+    @EntityGraph(attributePaths = {"item"})
     List<RoomInventory> findAllByRoom_RoomId(UUID roomId);
 
     List<RoomInventory> findAllByRoom_RoomIdAndItem_ItemIdIn(UUID roomId, List<UUID> itemIds);

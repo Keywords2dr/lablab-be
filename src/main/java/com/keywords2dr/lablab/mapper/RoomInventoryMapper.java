@@ -17,5 +17,10 @@ public interface RoomInventoryMapper {
             target = "availableQuantity",
             expression = "java(entity.getTotalQuantity().subtract(entity.getLockedQuantity()))"
     )
+
+    @Mapping(
+            target = "chemicalFormula",
+            expression = "java(entity.getItem() instanceof com.keywords2dr.lablab.entity.Chemical ? ((com.keywords2dr.lablab.entity.Chemical) entity.getItem()).getFormula() : null)"
+    )
     RoomInventoryResponseDTO toResponse(RoomInventory entity);
 }

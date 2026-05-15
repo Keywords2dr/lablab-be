@@ -83,12 +83,12 @@ public interface RentTicketRepository extends JpaRepository<RentTicket, UUID>,
      * yêu cầu chưa — tránh trùng lịch mượn phòng.
      */
     @Query("""
-            SELECT COUNT(t) > 0 FROM RentTicket t
-            WHERE t.fromRoom.roomId = :roomId
-              AND t.status IN ('APPROVED', 'BORROWED')
-              AND t.borrowDate < :expectedReturnDate
-              AND t.expectedReturnDate > :borrowDate
-            """)
+        SELECT COUNT(t) > 0 FROM RentTicket t
+        WHERE t.fromRoom.roomId = :roomId
+          AND t.status NOT IN ('CANCELLED', 'REJECTED', 'RETURNED')
+          AND t.borrowDate < :expectedReturnDate
+          AND t.expectedReturnDate > :borrowDate
+        """)
     boolean existsConflictingBooking(
             @Param("roomId") UUID roomId,
             @Param("borrowDate") java.time.LocalDateTime borrowDate,

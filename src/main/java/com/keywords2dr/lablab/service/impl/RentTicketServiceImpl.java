@@ -145,6 +145,10 @@ public class RentTicketServiceImpl implements RentTicketService {
         ticket.setStatus(TicketStatus.CANCELLED);
         rentTicketRepository.save(ticket);
 
+        if (ticket.getTicketType() != TicketType.ROOM_ONLY) {
+            unlockInventory(ticket);
+        }
+
         notifyRoomStaff(ticket.getFromRoom(),
                 "Phiếu mượn đã bị hủy",
                 String.format("[%s] đã hủy phiếu mượn tại phòng %s.",
@@ -204,6 +208,10 @@ public class RentTicketServiceImpl implements RentTicketService {
 
         if (Boolean.FALSE.equals(request.getApproved())) {
             validateRejectedReason(request.getRejectedReason());
+        } else {
+            if (ticket.getTicketType() != TicketType.ROOM_ONLY) {
+                validateInventoryOnApprove(ticket);
+            }
         }
 
         User teacher = userRepository.findById(teacherId)
@@ -216,6 +224,10 @@ public class RentTicketServiceImpl implements RentTicketService {
             ticket.setRejectedReason(request.getRejectedReason());
             ticket.setRejectedAt(LocalDateTime.now());
             ticket.setRejectedBy(teacher);
+
+            if (ticket.getTicketType() != TicketType.ROOM_ONLY) {
+                unlockInventory(ticket);
+            }
 
             notifyUser(ticket.getRequester().getUserId(),
                     "Phiếu mượn bị từ chối",
@@ -412,6 +424,10 @@ public class RentTicketServiceImpl implements RentTicketService {
             ticket.setRejectedAt(LocalDateTime.now());
             ticket.setRejectedBy(admin);
 
+            if (ticket.getTicketType() != TicketType.ROOM_ONLY) {
+                unlockInventory(ticket);
+            }
+
             notifyUser(ticket.getRequester().getUserId(),
                     "Phiếu mượn bị từ chối",
                     String.format("Admin đã từ chối phiếu mượn tại phòng %s. Lý do: %s",
@@ -422,7 +438,7 @@ public class RentTicketServiceImpl implements RentTicketService {
             ticket.setAdminApprovedBy(admin);
             ticket.setAdminApprovedAt(LocalDateTime.now());
 
-            lockInventory(ticket);
+            validateInventoryOnApprove(ticket);
 
             notifyUser(ticket.getRequester().getUserId(),
                     "Phiếu mượn được duyệt",
@@ -569,6 +585,10 @@ public class RentTicketServiceImpl implements RentTicketService {
                                 + "Khả dụng: " + available + " " + item.getUnit());
             }
 
+
+            inventory.setLockedQuantity(
+                    inventory.getLockedQuantity().add(dto.getQuantityBorrowed()));
+
             details.add(RentTicketDetail.builder()
                     .ticket(ticket)
                     .item(item)
@@ -577,7 +597,30 @@ public class RentTicketServiceImpl implements RentTicketService {
                     .build());
         }
 
+        roomInventoryRepository.saveAll(inventoryMap.values());
+
         return details;
+    }
+
+    private void validateInventoryOnApprove(RentTicket ticket) {
+        if (hasNoDetails(ticket)) return;
+
+        Map<UUID, RoomInventory> inventoryMap = loadInventoryMap(ticket);
+
+        for (RentTicketDetail detail : ticket.getTicketDetails()) {
+            RoomInventory inventory = inventoryMap.get(detail.getItem().getItemId());
+            if (inventory == null) {
+                throw new ResourceNotFoundException(
+                        "Không tìm thấy tồn kho cho hóa chất: " + detail.getItem().getName());
+            }
+
+            if (inventory.getLockedQuantity().compareTo(inventory.getTotalQuantity()) > 0) {
+                throw new BadRequestException(
+                        "Hóa chất [" + detail.getItem().getName() + "] không đủ số lượng để duyệt! "
+                                + "Tổng tồn kho: " + inventory.getTotalQuantity()
+                                + ", Đang khóa: " + inventory.getLockedQuantity());
+            }
+        }
     }
 
     private Map<UUID, RoomInventory> loadInventoryMap(RentTicket ticket) {
@@ -592,33 +635,23 @@ public class RentTicketServiceImpl implements RentTicketService {
                         Function.identity()));
     }
 
-    private void lockInventory(RentTicket ticket) {
+    private void unlockInventory(RentTicket ticket) {
         if (hasNoDetails(ticket)) return;
 
         Map<UUID, RoomInventory> inventoryMap = loadInventoryMap(ticket);
 
         for (RentTicketDetail detail : ticket.getTicketDetails()) {
             RoomInventory inventory = inventoryMap.get(detail.getItem().getItemId());
-            if (inventory == null) {
-                throw new ResourceNotFoundException(
-                        "Không tìm thấy tồn kho cho hóa chất: " + detail.getItem().getName());
-            }
+            if (inventory == null) continue;
 
-            BigDecimal available = inventory.getTotalQuantity()
-                    .subtract(inventory.getLockedQuantity());
-            if (detail.getQuantityBorrowed().compareTo(available) > 0) {
-                throw new BadRequestException(
-                        "Hóa chất [" + detail.getItem().getName() + "] không đủ số lượng khả dụng "
-                                + "để duyệt! Khả dụng: " + available);
-            }
-
+            BigDecimal newLocked = inventory.getLockedQuantity()
+                    .subtract(detail.getQuantityBorrowed());
             inventory.setLockedQuantity(
-                    inventory.getLockedQuantity().add(detail.getQuantityBorrowed()));
+                    newLocked.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : newLocked);
         }
 
         roomInventoryRepository.saveAll(inventoryMap.values());
     }
-
 
     private void processInventoryOnReturn(RentTicket ticket) {
         if (hasNoDetails(ticket)) return;

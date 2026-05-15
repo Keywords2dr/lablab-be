@@ -16,4 +16,5 @@ public class RoomInventoryResponseDTO {
     private BigDecimal lockedQuantity;
     private BigDecimal availableQuantity;
     private String note;
+    private String chemicalFormula;
 }
