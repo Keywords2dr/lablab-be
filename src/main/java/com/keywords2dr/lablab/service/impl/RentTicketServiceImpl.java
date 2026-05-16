@@ -574,6 +574,20 @@ public class RentTicketServiceImpl implements RentTicketService {
                 .map(rentTicketMapper::toSummaryResponse);
     }
 
+    @Override
+    public Page<RentTicketSummaryResponse> getMyTicketsFiltered(
+            UUID requesterId,
+            List<TicketStatus> excludedStatuses,
+            TicketType ticketType,
+            Pageable pageable) {
+
+        Specification<RentTicket> spec = RentTicketSpecification.filterForRequester(
+                requesterId, excludedStatuses, ticketType);
+
+        return rentTicketRepository.findAll(spec, pageable)
+                .map(rentTicketMapper::toSummaryResponse);
+    }
+
     // ── PRIVATE HELPERS ───────────────────────────────────────────────────────
 
     private RentTicket findTicketById(UUID ticketId) {

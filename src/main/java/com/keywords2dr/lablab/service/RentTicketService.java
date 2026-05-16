@@ -54,6 +54,13 @@ public interface RentTicketService {
     Page<RentTicketSummaryResponse> getMyTicketsByStatus(
             UUID requesterId, TicketStatus status, Pageable pageable);
 
+    Page<RentTicketSummaryResponse> getMyTicketsFiltered(
+            UUID requesterId,
+            List<TicketStatus> excludedStatuses,
+            TicketType ticketType,
+            Pageable pageable);
+
+
     /** Người mượn yêu cầu trả (BORROWED → PENDING_RETURN) */
     RentTicketResponse requestReturn(UUID ticketId, UUID requesterId, ReturnTicketRequest request);
 }

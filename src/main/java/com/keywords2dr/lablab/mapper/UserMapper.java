@@ -32,6 +32,8 @@ public interface UserMapper {
     @Mapping(target = "major",       source = "profile.major")
     @Mapping(target = "department",  source = "profile.department")
     @Mapping(target = "avatar",      source = "profile.avatar")
+    @Mapping(target = "createdAt",   source = "createdAt")
+    @Mapping(target = "updatedAt",   source = "updatedAt")
     UserResponseDTO toUserResponse(User user);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)

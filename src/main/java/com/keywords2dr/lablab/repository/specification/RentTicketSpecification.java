@@ -41,4 +41,32 @@ public class RentTicketSpecification {
             return cb.and(predicates.toArray(new Predicate[0]));
         };
     }
+
+    /**
+     * Requester filter: lấy phiếu của chính mình,
+     * loại trừ một số status (excludedStatuses) và lọc theo ticketType (optional).
+     */
+    public static Specification<RentTicket> filterForRequester(
+            UUID requesterId,
+            List<TicketStatus> excludedStatuses,
+            TicketType ticketType
+    ) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            predicates.add(cb.equal(root.get("requester").get("userId"), requesterId));
+
+            // Loại trừ các status không mong muốn
+            if (excludedStatuses != null && !excludedStatuses.isEmpty()) {
+                predicates.add(root.get("status").in(excludedStatuses).not());
+            }
+
+            // Lọc theo loại phiếu nếu có
+            if (ticketType != null) {
+                predicates.add(cb.equal(root.get("ticketType"), ticketType));
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+    }
 }

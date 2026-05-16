@@ -53,7 +53,7 @@ public class RentTicketController {
         return ResponseEntity.ok(ticketService.getMyTickets(SecurityUtils.getCurrentUserId(), pageable));
     }
 
-    @GetMapping("/my/filter")
+    @GetMapping("/my/filter") 
     @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER')")
     public ResponseEntity<Page<RentTicketSummaryResponse>> getMyTicketsByStatus(
             @RequestParam TicketStatus status,
@@ -110,6 +110,19 @@ public class RentTicketController {
         return ResponseEntity.ok(
                 ticketService.getTicketsByStatusForTeacher(
                         SecurityUtils.getCurrentUserId(), status, pageable));
+    }
+
+    @GetMapping("/my/search")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER')")
+    public ResponseEntity<Page<RentTicketSummaryResponse>> getMyTicketsFiltered(
+            @RequestParam(required = false) List<TicketStatus> excludeStatus,
+            @RequestParam(required = false) TicketType ticketType,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        return ResponseEntity.ok(
+                ticketService.getMyTicketsFiltered(
+                        SecurityUtils.getCurrentUserId(), excludeStatus, ticketType, pageable));
     }
 
     @PutMapping("/{id}/teacher-approve")

@@ -43,20 +43,24 @@ public class UserServiceImpl implements UserService {
             throw new ConflictException("Username '" + trimmedUsername + "' đã tồn tại!");
         }
 
-        String cleanUserForEmail = trimmedUsername.toLowerCase().replaceAll("\\s+", "");
-        String generatedEmail = cleanUserForEmail + "@gmail.com";
+        String email = request.getEmail().toLowerCase().trim();
+        if (userRepository.existsByEmailAndUserIdNot(email, null) ||
+                userRepository.findByEmail(email).isPresent()) {
+            throw new ConflictException("Email '" + email + "' đã được sử dụng!");
+        }
 
         User user = User.builder()
                 .username(trimmedUsername)
                 .password(passwordEncoder.encode(request.getPassword()))
                 .role(request.getRole().toUpperCase())
-                .isActive(true)
+                .isActive(request.getIsActive() != null ? request.getIsActive() : true)
                 .build();
 
         Profile profile = Profile.builder()
                 .user(user)
                 .fullName(request.getFullName() != null ? request.getFullName().trim() : "Chưa cập nhật")
-                .email(generatedEmail)
+                .email(email)
+                .phoneNumber(request.getPhoneNumber() != null ? request.getPhoneNumber().trim() : null)
                 .faculty(request.getFaculty())
                 .major(request.getMajor())
                 .department(request.getDepartment())
@@ -81,18 +85,21 @@ public class UserServiceImpl implements UserService {
         Profile profile = user.getProfile();
 
         if (request.getRole() != null) user.setRole(request.getRole().toUpperCase());
-        if (request.getIsActive() != null) user.setIsActive(request.getIsActive());
         if (request.getFullName() != null) profile.setFullName(request.getFullName().trim());
 
         if (request.getEmail() != null && !request.getEmail().equalsIgnoreCase(profile.getEmail())) {
             if (userRepository.existsByEmailAndUserIdNot(request.getEmail(), userId)) {
                 throw new ConflictException("Email '" + request.getEmail() + "' đã được sử dụng!");
             }
-            profile.setEmail(request.getEmail().toLowerCase());
+            profile.setEmail(request.getEmail().toLowerCase().trim());
         }
 
         if (request.getPhoneNumber() != null && !request.getPhoneNumber().trim().isEmpty()) {
-            profile.setPhoneNumber(request.getPhoneNumber().trim());
+            String phone = request.getPhoneNumber().trim();
+            if (userRepository.existsByPhoneNumberAndUserIdNot(phone, userId)) {
+                throw new ConflictException("Số điện thoại '" + phone + "' đã được sử dụng!");
+            }
+            profile.setPhoneNumber(phone);
         }
 
         if (request.getFaculty() != null) profile.setFaculty(request.getFaculty());
@@ -119,13 +126,25 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public void resetPassword(UUID userId, String newPassword) {
-        User user = findUserById(userId);
         if (newPassword == null || newPassword.trim().isEmpty()) {
             throw new BadRequestException("Mật khẩu mới không được để trống!");
         }
+        if (newPassword.trim().length() < 6) {
+            throw new BadRequestException("Mật khẩu phải có ít nhất 6 ký tự!");
+        }
+
+        User user = findUserById(userId);
+
+        if (passwordEncoder.matches(newPassword.trim(), user.getPassword())) {
+            throw new BadRequestException("Mật khẩu mới không được trùng với mật khẩu hiện tại!");
+        }
+
         user.setPassword(passwordEncoder.encode(newPassword.trim()));
         userRepository.save(user);
-        auditLogService.logAction("RESET_PASSWORD", "USER", userId, "Mật khẩu cũ", "Đã đặt lại mật khẩu mới");
+
+        auditLogService.logAction("RESET_PASSWORD", "USER", userId,
+                Map.of("note", "Mật khẩu cũ"),
+                Map.of("note", "Đã đặt lại mật khẩu mới"));
     }
 
     @Override
@@ -137,13 +156,29 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public ProfileResponse updateMyProfile(UpdateProfileRequest request) {
-        User user = findUserById(currentUserIdOrThrow());
+        UUID currentUserId = currentUserIdOrThrow();
+        User user = findUserById(currentUserId);
         Map<String, Object> oldData = userToLogMap(user);
 
         if (user.getProfile() == null) {
             user.setProfile(Profile.builder().user(user).build());
         }
-        userMapper.updateProfileFromRequest(request, user.getProfile());
+        Profile profile = user.getProfile();
+
+        if (request.getEmail() != null && !request.getEmail().equalsIgnoreCase(profile.getEmail())) {
+            if (userRepository.existsByEmailAndUserIdNot(request.getEmail(), currentUserId)) {
+                throw new ConflictException("Email '" + request.getEmail() + "' đã được sử dụng!");
+            }
+        }
+
+        if (request.getPhoneNumber() != null && !request.getPhoneNumber().trim().isEmpty()) {
+            String phone = request.getPhoneNumber().trim();
+            if (userRepository.existsByPhoneNumberAndUserIdNot(phone, currentUserId)) {
+                throw new ConflictException("Số điện thoại '" + phone + "' đã được sử dụng!");
+            }
+        }
+
+        userMapper.updateProfileFromRequest(request, profile);
 
         User savedUser = userRepository.save(user);
         auditLogService.logAction("UPDATE_MY_PROFILE", "USER", savedUser.getUserId(), oldData, userToLogMap(savedUser));
@@ -154,13 +189,26 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public void changePassword(ChangePasswordRequest request) {
+        if (!request.getNewPassword().equals(request.getConfirmPassword())) {
+            throw new BadRequestException("Mật khẩu xác nhận không khớp!");
+        }
+
         User user = findUserById(currentUserIdOrThrow());
+
         if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
             throw new BadRequestException("Mật khẩu cũ không chính xác!");
         }
+
+        if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
+            throw new BadRequestException("Mật khẩu mới không được trùng với mật khẩu cũ!");
+        }
+
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
-        auditLogService.logAction("CHANGE_PASSWORD", "USER", user.getUserId(), "Mật khẩu cũ", "Đã đổi mật khẩu cá nhân");
+
+        auditLogService.logAction("CHANGE_PASSWORD", "USER", user.getUserId(),
+                Map.of("note", "Mật khẩu cũ"),
+                Map.of("note", "Đã đổi mật khẩu cá nhân"));
     }
 
     @Override
@@ -203,6 +251,7 @@ public class UserServiceImpl implements UserService {
         if (user.getProfile() != null) {
             map.put("fullName", user.getProfile().getFullName());
             map.put("email", user.getProfile().getEmail());
+            map.put("phoneNumber", user.getProfile().getPhoneNumber());
             map.put("faculty", user.getProfile().getFaculty());
             map.put("major", user.getProfile().getMajor());
             map.put("department", user.getProfile().getDepartment());
