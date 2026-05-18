@@ -32,4 +32,6 @@ public interface RoomInventoryRepository extends JpaRepository<RoomInventory, UU
             WHERE ri.totalQuantity > 0
             """)
     List<RoomInventory> findAllPositiveStockWithItemAndRoom();
+
+    boolean existsByItem_ItemIdAndRoom_RoomId(UUID itemId, UUID roomId);
 }
