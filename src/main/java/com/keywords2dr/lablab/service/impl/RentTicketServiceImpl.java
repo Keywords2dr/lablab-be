@@ -2,6 +2,7 @@ package com.keywords2dr.lablab.service.impl;
 
 import com.keywords2dr.lablab.dto.ticket.*;
 import com.keywords2dr.lablab.entity.*;
+import com.keywords2dr.lablab.entity.enums.PurposeType;
 import com.keywords2dr.lablab.entity.enums.ReturnStatus;
 import com.keywords2dr.lablab.entity.enums.TicketStatus;
 import com.keywords2dr.lablab.entity.enums.TicketType;
@@ -825,5 +826,15 @@ public class RentTicketServiceImpl implements RentTicketService {
 
     private void notifyUser(UUID userId, String title, String message, String type) {
         eventPublisher.publishEvent(new NotificationEvent(userId, title, message, type));
+    }
+
+    private PurposeType parsePurposeType(String raw) {
+        if (raw == null || raw.isBlank()) return PurposeType.OTHER;
+        try {
+            return PurposeType.valueOf(raw.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new BadRequestException("Mục đích mượn không hợp lệ: " + raw
+                    + ". Các giá trị hợp lệ: TEACHING, RESEARCH, EXAM, OTHER");
+        }
     }
 }

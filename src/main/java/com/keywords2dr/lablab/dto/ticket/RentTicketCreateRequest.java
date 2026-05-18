@@ -1,5 +1,6 @@
 package com.keywords2dr.lablab.dto.ticket;
 
+import com.keywords2dr.lablab.entity.enums.PurposeType;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.NotBlank;
@@ -20,7 +21,7 @@ public class RentTicketCreateRequest {
     private String ticketType;      // ROOM_ONLY | CHEMICAL_ONLY
 
     // Thông tin mục đích
-    private String purposeType;     // TEACHING | RESEARCH | PERSONAL | OTHER
+    private PurposeType purposeType;     // TEACHING | RESEARCH | PERSONAL | OTHER
     private String subjectName;
     private String lessonDetail;
     private String classCode;

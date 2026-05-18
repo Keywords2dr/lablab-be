@@ -26,6 +26,7 @@ public interface RentTicketMapper {
     @Mapping(target = "roomName",            source = "fromRoom.roomName")
     @Mapping(target = "ticketType",          expression = "java(ticket.getTicketType() != null ? ticket.getTicketType().name() : null)")
     @Mapping(target = "status",              expression = "java(ticket.getStatus() != null ? ticket.getStatus().name() : null)")
+    @Mapping(target = "purposeType",         expression = "java(ticket.getPurposeType() != null ? ticket.getPurposeType().name() : null)")
     @Mapping(target = "ownerApprovedById",   source = "ownerApprovedBy.userId")
     @Mapping(target = "adminApprovedById",   source = "adminApprovedBy.userId")
     @Mapping(target = "rejectedById",        source = "rejectedBy.userId")
