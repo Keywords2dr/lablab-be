@@ -47,6 +47,8 @@ public class RentTicket {
     private String lessonDetail;
     private String classCode;
 
+    private String note;
+
     @Column(nullable = false)
     private LocalDateTime borrowDate;
 

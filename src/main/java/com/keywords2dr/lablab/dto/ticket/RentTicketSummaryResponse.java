@@ -25,6 +25,9 @@ public class RentTicketSummaryResponse {
     private String purposeType;
     private String subjectName;
 
+    // Ghi chú của người tạo
+    private String note;
+
     // Thời gian
     private LocalDateTime borrowDate;
     private LocalDateTime expectedReturnDate;

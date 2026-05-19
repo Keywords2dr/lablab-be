@@ -63,6 +63,8 @@ public interface RentTicketMapper {
     @Mapping(target = "roomName",      source = "fromRoom.roomName")
     @Mapping(target = "ticketType",    expression = "java(ticket.getTicketType() != null ? ticket.getTicketType().name() : null)")
     @Mapping(target = "status",        expression = "java(ticket.getStatus() != null ? ticket.getStatus().name() : null)")
+    @Mapping(target = "purposeType",   expression = "java(ticket.getPurposeType() != null ? ticket.getPurposeType().name() : null)")
+    @Mapping(target = "note",          source = "note")
     @Mapping(target = "requesterName", ignore = true)
     @Mapping(target = "itemCount",     ignore = true)
     RentTicketSummaryResponse toSummaryResponse(RentTicket ticket);

@@ -30,6 +30,9 @@ public class RentTicketResponse {
     private String lessonDetail;
     private String classCode;
 
+    // Ghi chú của người tạo (có thể null)
+    private String note;
+
     // Thời gian
     private LocalDateTime borrowDate;
     private LocalDateTime expectedReturnDate;

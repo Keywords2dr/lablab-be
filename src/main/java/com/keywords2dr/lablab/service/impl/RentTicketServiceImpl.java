@@ -95,6 +95,7 @@ public class RentTicketServiceImpl implements RentTicketService {
                 .subjectName(request.getSubjectName())
                 .lessonDetail(request.getLessonDetail())
                 .classCode(request.getClassCode())
+                .note(request.getNote())
                 .borrowDate(request.getBorrowDate())
                 .expectedReturnDate(request.getExpectedReturnDate())
                 .build();

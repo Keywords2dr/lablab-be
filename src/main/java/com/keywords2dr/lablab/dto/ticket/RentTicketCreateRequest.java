@@ -21,7 +21,7 @@ public class RentTicketCreateRequest {
     private String ticketType;      // ROOM_ONLY | CHEMICAL_ONLY
 
     // Thông tin mục đích
-    private PurposeType purposeType;     // TEACHING | RESEARCH | PERSONAL | OTHER
+    private PurposeType purposeType;     // TEACHING | RESEARCH | EXAM | OTHER
     private String subjectName;
     private String lessonDetail;
     private String classCode;
@@ -33,6 +33,9 @@ public class RentTicketCreateRequest {
     @NotNull(message = "Thời gian dự kiến trả không được để trống!")
     @Future(message = "Thời gian trả phải sau thời điểm hiện tại!")
     private LocalDateTime expectedReturnDate;
+
+    // Ghi chú của người tạo (có thể null)
+    private String note;
 
     // Danh sách hóa chất mượn — bắt buộc nếu ticketType != ROOM_ONLY
     @Valid
