@@ -4,6 +4,7 @@ import com.keywords2dr.lablab.dto.chemical.ChemicalAdminResponse;
 import com.keywords2dr.lablab.dto.chemical.ChemicalRequestDTO;
 import com.keywords2dr.lablab.dto.chemical.DeleteChemicalResponse;
 import com.keywords2dr.lablab.entity.Chemical;
+import com.keywords2dr.lablab.entity.Room;
 import com.keywords2dr.lablab.entity.RoomInventory;
 import com.keywords2dr.lablab.exception.BadRequestException;
 import com.keywords2dr.lablab.exception.ConflictException;
@@ -12,6 +13,7 @@ import com.keywords2dr.lablab.mapper.ChemicalMapper;
 import com.keywords2dr.lablab.repository.ChemicalRepository;
 import com.keywords2dr.lablab.repository.ItemRepository;
 import com.keywords2dr.lablab.repository.RoomInventoryRepository;
+import com.keywords2dr.lablab.repository.RoomRepository;
 import com.keywords2dr.lablab.repository.specification.ChemicalSpecification;
 import com.keywords2dr.lablab.service.AuditLogService;
 import com.keywords2dr.lablab.service.ChemicalService;
@@ -36,11 +38,11 @@ public class ChemicalServiceImpl implements ChemicalService {
     private final ChemicalRepository chemicalRepository;
     private final ItemRepository itemRepository;
     private final RoomInventoryRepository roomInventoryRepository;
+    private final RoomRepository roomRepository;
     private final ChemicalMapper chemicalMapper;
     private final DataNormalizationService normalizationService;
     private final AuditLogService auditLogService;
 
-    // PUBLIC CORE METHODS (CRUD)
     @Override
     @Transactional
     public ChemicalAdminResponse createChemical(ChemicalRequestDTO request) {
@@ -64,6 +66,24 @@ public class ChemicalServiceImpl implements ChemicalService {
         normalizeChemicalRequest(request);
         Chemical chemical = chemicalMapper.toEntity(request);
         Chemical savedChemical = chemicalRepository.save(chemical);
+
+        if (request.getPackageCount() != null && request.getPackageCount() > 0 && StringUtils.hasText(request.getRoomName())) {
+            Room room = roomRepository.findAll().stream()
+                    .filter(r -> r.getRoomName().trim().equalsIgnoreCase(request.getRoomName().trim()))
+                    .findFirst()
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy Phòng Lab khớp với tên: " + request.getRoomName()));
+
+            BigDecimal totalQuantity = request.getAmountPerPackage().multiply(new BigDecimal(request.getPackageCount()));
+
+            RoomInventory inventory = RoomInventory.builder()
+                    .room(room)
+                    .item(savedChemical)
+                    .totalQuantity(totalQuantity)
+                    .lockedQuantity(BigDecimal.ZERO)
+                    .packageCount(request.getPackageCount())
+                    .build();
+            roomInventoryRepository.save(inventory);
+        }
 
         ChemicalAdminResponse responseDTO = chemicalMapper.toAdminResponse(savedChemical);
         auditLogService.logAction("CREATE", "CHEMICAL", savedChemical.getItemId(), null, responseDTO);
@@ -138,7 +158,6 @@ public class ChemicalServiceImpl implements ChemicalService {
         auditLogService.logAction("RESTORE", "CHEMICAL", id, null, chemicalMapper.toAdminResponse(restoredChemical));
     }
 
-    // PUBLIC FEATURE METHODS (GET & BATCH)
     @Override
     @Transactional(readOnly = true)
     public Page<ChemicalAdminResponse> filterChemicals(String keyword, String packaging, String supplier, String unit, String category, Pageable pageable) {
@@ -216,7 +235,6 @@ public class ChemicalServiceImpl implements ChemicalService {
         createChemical(request);
     }
 
-    // HELPER METHODS
     private void normalizeChemicalRequest(ChemicalRequestDTO request) {
         request.setPackaging(normalizationService.normalizeAndLearn(request.getPackaging(), "PACKAGING"));
         request.setUnit(normalizationService.normalizeAndLearn(request.getUnit(), "UNIT"));

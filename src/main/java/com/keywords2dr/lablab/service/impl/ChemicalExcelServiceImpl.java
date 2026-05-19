@@ -2,7 +2,9 @@ package com.keywords2dr.lablab.service.impl;
 
 import com.keywords2dr.lablab.dto.chemical.ChemicalRequestDTO;
 import com.keywords2dr.lablab.entity.Chemical;
+import com.keywords2dr.lablab.entity.RoomInventory;
 import com.keywords2dr.lablab.repository.ChemicalRepository;
+import com.keywords2dr.lablab.repository.RoomInventoryRepository;
 import com.keywords2dr.lablab.service.ChemicalExcelService;
 import com.keywords2dr.lablab.service.DataNormalizationService;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -26,8 +29,8 @@ public class ChemicalExcelServiceImpl implements ChemicalExcelService {
 
     private final ChemicalRepository chemicalRepository;
     private final DataNormalizationService normalizationService;
+    private final RoomInventoryRepository roomInventoryRepository;
 
-    // Import / Export
     @Override
     public List<ChemicalRequestDTO> parseChemicalsFromExcel(MultipartFile file) {
         if (!isExcelFormat(file)) throw new RuntimeException("Vui lòng tải lên file Excel (.xlsx)!");
@@ -62,6 +65,15 @@ public class ChemicalExcelServiceImpl implements ChemicalExcelService {
                     try { dto.setAmountPerPackage(new BigDecimal(amountStr)); } catch (NumberFormatException ignored) {}
                 }
 
+                dto.setRoomName(getCellData(currentRow, columnMap, "NƠI LƯU CHỨA", "PHÒNG"));
+
+                String quantityStr = getCellData(currentRow, columnMap, "SỐ LƯỢNG", "SO LUONG");
+                if (quantityStr != null && !quantityStr.trim().isEmpty()) {
+                    try {
+                        dto.setPackageCount(Integer.parseInt(quantityStr));
+                    } catch (NumberFormatException ignored) {}
+                }
+
                 String itemCode = getCellData(currentRow, columnMap, "MÃ HÓA CHẤT");
                 if (itemCode == null || itemCode.isEmpty()) {
                     itemCode = "HC_AUTO_" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
@@ -83,13 +95,30 @@ public class ChemicalExcelServiceImpl implements ChemicalExcelService {
     @Override
     public ByteArrayInputStream exportChemicalsToExcel() {
         List<Chemical> chemicals = chemicalRepository.findAllByIsDeletedFalse();
+        List<RoomInventory> allInventories = roomInventoryRepository.findAll();
+
+        Map<UUID, List<RoomInventory>> inventoryMap = allInventories.stream()
+                .filter(ri -> ri.getItem() != null)
+                .collect(Collectors.groupingBy(ri -> ri.getItem().getItemId()));
 
         try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
             Sheet sheet = workbook.createSheet("Kho_Hoa_Chat");
             CellStyle headerStyle = createHeaderStyle(workbook);
             CellStyle dataStyle = createDataStyle(workbook);
 
-            String[] headers = {"STT", "Mã Hóa Chất", "Tên Hóa Chất", "Công Thức", "Đơn Vị Tính", "Quy Cách", "Dung Tích/Gói", "Nhà Cung Cấp"};
+            String[] headers = {
+                    "STT",
+                    "MÃ HÓA CHẤT",
+                    "TÊN HÓA CHẤT",
+                    "CÔNG THỨC",
+                    "NHÀ CUNG CẤP",
+                    "ĐÓNG GÓI",
+                    "ĐƠN VỊ",
+                    "KHỐI LƯỢNG",
+                    "NƠI LƯU CHỨA",
+                    "SỐ LƯỢNG"
+            };
+
             Row headerRow = sheet.createRow(0);
             headerRow.setHeightInPoints(25);
 
@@ -101,20 +130,27 @@ public class ChemicalExcelServiceImpl implements ChemicalExcelService {
 
             int rowIdx = 1;
             for (Chemical c : chemicals) {
-                Row row = sheet.createRow(rowIdx);
-                createCell(row, 0, String.valueOf(rowIdx), dataStyle);
-                createCell(row, 1, c.getItemCode(), dataStyle);
-                createCell(row, 2, c.getName(), dataStyle);
-                createCell(row, 3, c.getFormula(), dataStyle);
-                createCell(row, 4, c.getUnit(), dataStyle);
-                createCell(row, 5, c.getPackaging(), dataStyle);
+                List<RoomInventory> roomStocks = inventoryMap.getOrDefault(c.getItemId(), Collections.emptyList());
 
-                Cell amountCell = row.createCell(6);
-                amountCell.setCellStyle(dataStyle);
-                amountCell.setCellValue(c.getAmountPerPackage() != null ? c.getAmountPerPackage().doubleValue() : 0);
+                if (roomStocks.isEmpty()) {
+                    Row row = sheet.createRow(rowIdx);
+                    writeChemicalCoreCells(row, rowIdx, c, dataStyle);
+                    createCell(row, 8, "", dataStyle);
+                    createCell(row, 9, "", dataStyle);
+                    rowIdx++;
+                } else {
+                    for (RoomInventory inv : roomStocks) {
+                        Row row = sheet.createRow(rowIdx);
+                        writeChemicalCoreCells(row, rowIdx, c, dataStyle);
+                        createCell(row, 8, inv.getRoom() != null ? inv.getRoom().getRoomName() : "", dataStyle);
 
-                createCell(row, 7, c.getSupplier(), dataStyle);
-                rowIdx++;
+                        Cell qtyCell = row.createCell(9);
+                        qtyCell.setCellStyle(dataStyle);
+                        qtyCell.setCellValue(inv.getPackageCount() != null ? inv.getPackageCount() : 0);
+
+                        rowIdx++;
+                    }
+                }
             }
 
             sheet.setAutoFilter(new org.apache.poi.ss.util.CellRangeAddress(0, rowIdx - 1, 0, headers.length - 1));
@@ -128,7 +164,20 @@ public class ChemicalExcelServiceImpl implements ChemicalExcelService {
         }
     }
 
-    // HELPER METHODS (Xử lý Excel nội bộ)
+    private void writeChemicalCoreCells(Row row, int stt, Chemical c, CellStyle dataStyle) {
+        createCell(row, 0, String.valueOf(stt), dataStyle);
+        createCell(row, 1, c.getItemCode(), dataStyle);
+        createCell(row, 2, c.getName(), dataStyle);
+        createCell(row, 3, c.getFormula(), dataStyle);
+        createCell(row, 4, c.getSupplier(), dataStyle);
+        createCell(row, 5, c.getPackaging(), dataStyle);
+        createCell(row, 6, c.getUnit(), dataStyle);
+
+        Cell amountCell = row.createCell(7);
+        amountCell.setCellStyle(dataStyle);
+        amountCell.setCellValue(c.getAmountPerPackage() != null ? c.getAmountPerPackage().doubleValue() : 0);
+    }
+
     private CellStyle createHeaderStyle(Workbook workbook) {
         CellStyle style = workbook.createCellStyle();
         style.setFillForegroundColor(IndexedColors.DARK_BLUE.getIndex());

@@ -30,4 +30,7 @@ public class ChemicalRequestDTO {
     private BigDecimal amountPerPackage;
 
     private String supplier;
+
+    private Integer packageCount;
+    private String roomName;
 }
