@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -39,4 +40,6 @@ public interface RoomRepository extends JpaRepository<Room, UUID>, JpaSpecificat
             WHERE r.roomId IN :ids
             """)
     List<Room> findAllByIdWithStaff(@Param("ids") Set<UUID> ids);
+
+    Optional<Room> findByRoomNameIgnoreCase(String roomName);
 }

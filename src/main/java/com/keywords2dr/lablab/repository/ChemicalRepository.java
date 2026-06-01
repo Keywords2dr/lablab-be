@@ -9,7 +9,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -21,6 +23,7 @@ public interface ChemicalRepository extends JpaRepository<Chemical, UUID>, JpaSp
     int softDeleteById(@Param("id") UUID id);
 
     @Modifying
+    @Transactional
     @Query(value = "UPDATE items SET is_deleted = false WHERE item_id = :id", nativeQuery = true)
     int restoreById(@Param("id") UUID id);
 
@@ -39,6 +42,26 @@ public interface ChemicalRepository extends JpaRepository<Chemical, UUID>, JpaSp
     boolean existsDeletedByNameIgnoreCaseAndSupplierIgnoreCase(
             @Param("name") String name,
             @Param("supplier") String supplier);
+
+    /**
+     * Tìm hóa chất theo đúng 4 trường định danh: name + supplier + packaging + amountPerPackage.
+     * Dùng cho import Excel khi dữ liệu đầy đủ — ưu tiên match chính xác.
+     */
+    @Query("SELECT c FROM Chemical c WHERE " +
+            "LOWER(c.name) = LOWER(:name) AND " +
+            "LOWER(c.supplier) = LOWER(:supplier) AND " +
+            "LOWER(c.packaging) = LOWER(:packaging) AND " +
+            "c.amountPerPackage = :amountPerPackage AND " +
+            "c.isDeleted = false")
+    Optional<Chemical> findExistingChemical(
+            @Param("name") String name,
+            @Param("supplier") String supplier,
+            @Param("packaging") String packaging,
+            @Param("amountPerPackage") BigDecimal amountPerPackage);
+
+    // NEW: Fallback cho import Excel khi thiếu packaging/amountPerPackage
+    Optional<Chemical> findFirstByNameIgnoreCaseAndSupplierIgnoreCaseAndIsDeletedFalse(
+            String name, String supplier);
 
     @Query("SELECT DISTINCT c.packaging FROM Chemical c WHERE c.packaging IS NOT NULL AND c.isDeleted = false ORDER BY c.packaging ASC")
     List<String> findDistinctPackagings();
