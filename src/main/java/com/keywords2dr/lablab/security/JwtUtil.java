@@ -9,7 +9,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
-
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
@@ -19,6 +18,9 @@ public class JwtUtil {
     @Value("${jwt.secret}")
     private String SECRET_KEY;
 
+    @Value("${jwt.expiration:86400000}")
+    private long jwtExpiration;
+
     private SecretKey key;
 
     @PostConstruct
@@ -27,11 +29,14 @@ public class JwtUtil {
     }
 
     public String generateToken(String username) {
-        Date now = new Date();
+        long nowMillis = System.currentTimeMillis();
+        Date now = new Date(nowMillis);
+        Date expiryDate = new Date(nowMillis + jwtExpiration);
 
         return Jwts.builder()
                 .subject(username)
                 .issuedAt(now)
+                .expiration(expiryDate)
                 .signWith(key)
                 .compact();
     }
