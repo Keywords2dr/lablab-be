@@ -19,6 +19,7 @@ import com.keywords2dr.lablab.util.UserNameResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -120,7 +121,7 @@ public class RentTicketServiceImpl implements RentTicketService {
         RentTicket savedTicket = rentTicketRepository.save(ticket);
 
         if (ticketType == TicketType.CHEMICAL_ONLY) {
-            List<RentTicketDetail> details = buildTicketDetails(savedTicket, request.getItems(), room);
+            Set<RentTicketDetail> details = buildTicketDetails(savedTicket, request.getItems(), room);
             rentTicketDetailRepository.saveAll(details);
             savedTicket.setTicketDetails(details);
         }
@@ -187,7 +188,9 @@ public class RentTicketServiceImpl implements RentTicketService {
     @Override
     @Transactional(readOnly = true)
     public RentTicketResponse getTicketById(UUID ticketId) {
-        return rentTicketMapper.toResponse(findTicketById(ticketId));
+        return rentTicketMapper.toResponse(
+                rentTicketRepository.findByIdFull(ticketId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy phiếu mượn!")));
     }
 
     // ── TEACHER ───────────────────────────────────────────────────────────────
@@ -202,14 +205,14 @@ public class RentTicketServiceImpl implements RentTicketService {
     @Override
     @Transactional(readOnly = true)
     public Page<RentTicketSummaryResponse> getAllTicketsForTeacher(UUID teacherId, Pageable pageable) {
-        return rentTicketRepository.findAllTicketsByTeacher(teacherId, pageable)
-                .map(rentTicketMapper::toSummaryResponse);
+        Page<UUID> idPage = rentTicketRepository.findTeacherTicketIds(teacherId, pageable);
+        return fetchByIdsAndMap(idPage, pageable);
     }
 
     @Override
     @Transactional
     public RentTicketResponse teacherApprove(UUID ticketId, UUID teacherId, RentTicketApproveRequest request) {
-        RentTicket ticket = findTicketById(ticketId);
+        RentTicket ticket = findTicketByIdForRead(ticketId);
 
         boolean isOwner = ticket.getFromRoom().getStaffAssignments().stream()
                 .anyMatch(sa -> sa.getUser().getUserId().equals(teacherId));
@@ -412,8 +415,8 @@ public class RentTicketServiceImpl implements RentTicketService {
     @Transactional(readOnly = true)
     public Page<RentTicketSummaryResponse> getTicketsByStatusForTeacher(
             UUID teacherId, TicketStatus status, Pageable pageable) {
-        return rentTicketRepository.findTicketsByTeacherAndStatus(teacherId, status, pageable)
-                .map(rentTicketMapper::toSummaryResponse);
+        Page<UUID> idPage = rentTicketRepository.findTeacherTicketIdsByStatus(teacherId, status, pageable);
+        return fetchByIdsAndMap(idPage, pageable);
     }
 
     // ── ADMIN ─────────────────────────────────────────────────────────────────
@@ -430,10 +433,9 @@ public class RentTicketServiceImpl implements RentTicketService {
     public Page<RentTicketSummaryResponse> getAllTicketsForAdmin(
             UUID roomId, TicketStatus status, TicketType ticketType,
             UUID requesterId, Pageable pageable) {
-        Specification<RentTicket> spec = RentTicketSpecification.filter(
-                roomId, status, ticketType, requesterId);
-        return rentTicketRepository.findAll(spec, pageable)
-                .map(rentTicketMapper::toSummaryResponse);
+        Page<UUID> idPage = rentTicketRepository.findAdminTicketIds(
+                roomId, status, ticketType, requesterId, pageable);
+        return fetchByIdsAndMap(idPage, pageable);
     }
 
     @Override
@@ -519,9 +521,8 @@ public class RentTicketServiceImpl implements RentTicketService {
     @Override
     @Transactional(readOnly = true)
     public Page<RentTicketSummaryResponse> getMyTickets(UUID requesterId, Pageable pageable) {
-        return rentTicketRepository
-                .findMyTicketsFetched(requesterId, pageable)
-                .map(rentTicketMapper::toSummaryResponse);
+        Page<UUID> idPage = rentTicketRepository.findMyTicketIds(requesterId, pageable);
+        return fetchByIdsAndMap(idPage, pageable);
     }
 
     @Override
@@ -537,7 +538,7 @@ public class RentTicketServiceImpl implements RentTicketService {
         }
 
         if (ticket.getTicketType() != TicketType.ROOM_ONLY) {
-            List<RentTicketDetail> details = ticket.getTicketDetails();
+            List<RentTicketDetail> details = ticket.getTicketDetailsList();
             if (details == null || details.isEmpty()) {
                 throw new BadRequestException("Phiếu có hóa chất nhưng không có chi tiết nào!");
             }
@@ -588,9 +589,8 @@ public class RentTicketServiceImpl implements RentTicketService {
     @Transactional(readOnly = true)
     public Page<RentTicketSummaryResponse> getMyTicketsByStatus(
             UUID requesterId, TicketStatus status, Pageable pageable) {
-        return rentTicketRepository
-                .findMyTicketsByStatusFetched(requesterId, status, pageable)
-                .map(rentTicketMapper::toSummaryResponse);
+        Page<UUID> idPage = rentTicketRepository.findMyTicketIdsByStatus(requesterId, status, pageable);
+        return fetchByIdsAndMap(idPage, pageable);
     }
 
     @Override
@@ -614,6 +614,11 @@ public class RentTicketServiceImpl implements RentTicketService {
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy phiếu mượn!"));
     }
 
+    private RentTicket findTicketByIdForRead(UUID ticketId) {
+        return rentTicketRepository.findByIdFull(ticketId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy phiếu mượn!"));
+    }
+    
     private void validateRejectedReason(String reason) {
         if (!StringUtils.hasText(reason)) {
             throw new BadRequestException("Vui lòng nhập lý do từ chối!");
@@ -624,7 +629,7 @@ public class RentTicketServiceImpl implements RentTicketService {
         return ticket.getTicketDetails() == null || ticket.getTicketDetails().isEmpty();
     }
 
-    private List<RentTicketDetail> buildTicketDetails(
+    private Set<RentTicketDetail> buildTicketDetails(
             RentTicket ticket, List<RentTicketDetailRequest> items, Room room) {
 
         List<UUID> itemIds = items.stream()
@@ -641,7 +646,7 @@ public class RentTicketServiceImpl implements RentTicketService {
                                 inv -> inv.getItem().getItemId(),
                                 Function.identity()));
 
-        List<RentTicketDetail> details = new ArrayList<>();
+        Set<RentTicketDetail> details = new LinkedHashSet<>();
 
         for (RentTicketDetailRequest dto : items) {
             Item item = itemMap.get(dto.getItemId());
@@ -853,5 +858,23 @@ public class RentTicketServiceImpl implements RentTicketService {
             throw new BadRequestException("Mục đích mượn không hợp lệ: " + raw
                     + ". Các giá trị hợp lệ: TEACHING, RESEARCH, EXAM, OTHER");
         }
+    }
+
+    private Page<RentTicketSummaryResponse> fetchByIdsAndMap(
+            Page<UUID> idPage, Pageable pageable) {
+        if (idPage.isEmpty()) return Page.empty(pageable);
+
+        List<RentTicket> tickets = rentTicketRepository.findAllByIds(idPage.getContent());
+
+        Map<UUID, RentTicket> ticketMap = tickets.stream()
+                .collect(Collectors.toMap(RentTicket::getTicketId, t -> t));
+
+        List<RentTicketSummaryResponse> content = idPage.getContent().stream()
+                .map(ticketMap::get)
+                .filter(Objects::nonNull)
+                .map(rentTicketMapper::toSummaryResponse)
+                .toList();
+
+        return new PageImpl<>(content, pageable, idPage.getTotalElements());
     }
 }
