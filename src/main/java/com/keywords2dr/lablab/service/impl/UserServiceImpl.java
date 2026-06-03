@@ -3,6 +3,7 @@ package com.keywords2dr.lablab.service.impl;
 import com.keywords2dr.lablab.dto.user.*;
 import com.keywords2dr.lablab.entity.Profile;
 import com.keywords2dr.lablab.entity.User;
+import com.keywords2dr.lablab.entity.enums.AllowedRole;
 import com.keywords2dr.lablab.exception.BadRequestException;
 import com.keywords2dr.lablab.exception.ConflictException;
 import com.keywords2dr.lablab.exception.ResourceNotFoundException;
@@ -43,6 +44,8 @@ public class UserServiceImpl implements UserService {
             throw new ConflictException("Username '" + trimmedUsername + "' đã tồn tại!");
         }
 
+        String role = AllowedRole.validateAndNormalize(request.getRole());
+
         String email = request.getEmail().toLowerCase().trim();
         if (userRepository.existsByEmailAndUserIdNot(email, null) ||
                 userRepository.findByEmail(email).isPresent()) {
@@ -52,7 +55,7 @@ public class UserServiceImpl implements UserService {
         User user = User.builder()
                 .username(trimmedUsername)
                 .password(passwordEncoder.encode(request.getPassword()))
-                .role(request.getRole().toUpperCase())
+                .role(role)
                 .isActive(request.getIsActive() != null ? request.getIsActive() : true)
                 .build();
 
@@ -84,7 +87,10 @@ public class UserServiceImpl implements UserService {
         }
         Profile profile = user.getProfile();
 
-        if (request.getRole() != null) user.setRole(request.getRole().toUpperCase());
+        if (request.getRole() != null) {
+            user.setRole(AllowedRole.validateAndNormalize(request.getRole()));
+        }
+
         if (request.getFullName() != null) profile.setFullName(request.getFullName().trim());
 
         if (request.getEmail() != null && !request.getEmail().equalsIgnoreCase(profile.getEmail())) {
