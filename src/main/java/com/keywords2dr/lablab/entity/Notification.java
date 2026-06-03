@@ -8,7 +8,10 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "notifications")
+@Table(name = "notifications", indexes = {
+        @Index(name = "idx_notif_user_read", columnList = "user_id, is_read"),
+        @Index(name = "idx_notif_created",   columnList = "created_at")
+})
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class Notification {
 
@@ -31,7 +34,6 @@ public class Notification {
 
     @Column(name = "is_read", nullable = false)
     private boolean isRead = false;
-
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

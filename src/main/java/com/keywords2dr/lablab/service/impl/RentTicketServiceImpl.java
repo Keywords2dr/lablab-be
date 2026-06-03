@@ -60,8 +60,23 @@ public class RentTicketServiceImpl implements RentTicketService {
                     "Phòng [" + room.getRoomName() + "] đang bị khóa, không thể tạo phiếu mượn!");
         }
 
+        LocalDateTime now = LocalDateTime.now();
+
+        if (!request.getBorrowDate().isAfter(now)) {
+            throw new BadRequestException(
+                    "Thời gian bắt đầu mượn phải sau thời điểm hiện tại! "
+                            + "Giờ hiện tại: " + now.truncatedTo(java.time.temporal.ChronoUnit.MINUTES));
+        }
+
         if (!request.getBorrowDate().isBefore(request.getExpectedReturnDate())) {
-            throw new BadRequestException("Thời gian trả phải sau thời gian mượn!");
+            throw new BadRequestException("Thời gian trả phải sau thời gian bắt đầu mượn!");
+        }
+
+        long durationHours = java.time.temporal.ChronoUnit.HOURS.between(
+                request.getBorrowDate(), request.getExpectedReturnDate());
+        if (durationHours > 7 * 24) {
+            throw new BadRequestException(
+                    "Thời gian mượn tối đa là 7 ngày! Thời gian yêu cầu: " + durationHours + " giờ.");
         }
 
         TicketType ticketType;
@@ -407,7 +422,7 @@ public class RentTicketServiceImpl implements RentTicketService {
     @Transactional(readOnly = true)
     public List<RentTicketSummaryResponse> getPendingTicketsForAdmin() {
         return rentTicketMapper.toSummaryList(
-                rentTicketRepository.findAllByStatusOrderByCreatedAtDesc(TicketStatus.PENDING_ADMIN));
+                rentTicketRepository.findAllByStatusFetched(TicketStatus.PENDING_ADMIN));
     }
 
     @Override
@@ -505,7 +520,7 @@ public class RentTicketServiceImpl implements RentTicketService {
     @Transactional(readOnly = true)
     public Page<RentTicketSummaryResponse> getMyTickets(UUID requesterId, Pageable pageable) {
         return rentTicketRepository
-                .findAllByRequester_UserIdOrderByCreatedAtDesc(requesterId, pageable)
+                .findMyTicketsFetched(requesterId, pageable)
                 .map(rentTicketMapper::toSummaryResponse);
     }
 
@@ -574,7 +589,7 @@ public class RentTicketServiceImpl implements RentTicketService {
     public Page<RentTicketSummaryResponse> getMyTicketsByStatus(
             UUID requesterId, TicketStatus status, Pageable pageable) {
         return rentTicketRepository
-                .findAllByRequester_UserIdAndStatusOrderByCreatedAtDesc(requesterId, status, pageable)
+                .findMyTicketsByStatusFetched(requesterId, status, pageable)
                 .map(rentTicketMapper::toSummaryResponse);
     }
 

@@ -16,8 +16,6 @@ import java.util.UUID;
 public interface RentTicketRepository extends JpaRepository<RentTicket, UUID>,
         JpaSpecificationExecutor<RentTicket> {
 
-    // ── TEACHER ──────────────────────────────────────────────────────────────
-
     @Query("""
             SELECT t FROM RentTicket t
             JOIN t.fromRoom r
@@ -52,26 +50,48 @@ public interface RentTicketRepository extends JpaRepository<RentTicket, UUID>,
             @Param("status") TicketStatus status,
             Pageable pageable);
 
-    // ── ADMIN ─────────────────────────────────────────────────────────────────
+    @Query("""
+            SELECT DISTINCT t FROM RentTicket t
+            JOIN FETCH t.requester req
+            LEFT JOIN FETCH req.profile
+            JOIN FETCH t.fromRoom
+            LEFT JOIN FETCH t.ticketDetails
+            WHERE t.status = :status
+            ORDER BY t.createdAt DESC
+            """)
+    List<RentTicket> findAllByStatusFetched(@Param("status") TicketStatus status);
 
-    List<RentTicket> findAllByStatusOrderByCreatedAtDesc(TicketStatus status);
-
-    // ── REQUESTER ─────────────────────────────────────────────────────────────
-
-    Page<RentTicket> findAllByRequester_UserIdOrderByCreatedAtDesc(
-            UUID requesterId,
+    @Query("""
+            SELECT DISTINCT t FROM RentTicket t
+            JOIN FETCH t.requester req
+            LEFT JOIN FETCH req.profile
+            JOIN FETCH t.fromRoom
+            LEFT JOIN FETCH t.ticketDetails
+            WHERE t.requester.userId = :requesterId
+            ORDER BY t.createdAt DESC
+            """)
+    Page<RentTicket> findMyTicketsFetched(
+            @Param("requesterId") UUID requesterId,
             Pageable pageable);
 
-    Page<RentTicket> findAllByRequester_UserIdAndStatusOrderByCreatedAtDesc(
-            UUID requesterId,
-            TicketStatus status,
+    @Query("""
+            SELECT DISTINCT t FROM RentTicket t
+            JOIN FETCH t.requester req
+            LEFT JOIN FETCH req.profile
+            JOIN FETCH t.fromRoom
+            LEFT JOIN FETCH t.ticketDetails
+            WHERE t.requester.userId = :requesterId
+              AND t.status = :status
+            ORDER BY t.createdAt DESC
+            """)
+    Page<RentTicket> findMyTicketsByStatusFetched(
+            @Param("requesterId") UUID requesterId,
+            @Param("status") TicketStatus status,
             Pageable pageable);
 
     List<RentTicket> findAllByRequester_UserIdAndStatus(
             UUID requesterId,
             TicketStatus status);
-
-    // ── KIỂM TRA CONFLICT THỜI GIAN ───────────────────────────────────────────
 
     @Query("""
         SELECT COUNT(t) > 0 FROM RentTicket t
@@ -85,12 +105,6 @@ public interface RentTicketRepository extends JpaRepository<RentTicket, UUID>,
             @Param("borrowDate") LocalDateTime borrowDate,
             @Param("expectedReturnDate") LocalDateTime expectedReturnDate);
 
-    // ── DASHBOARD: Weekly Stats ───────────────────────────────────────────────
-
-    /**
-     * Đếm số phiếu có createdAt trong khoảng [from, to) và status thuộc danh sách statuses.
-     * Dùng cho endpoint GET /api/tickets/admin/stats/weekly
-     */
     @Query("""
             SELECT COUNT(t) FROM RentTicket t
             WHERE t.createdAt >= :from
@@ -102,12 +116,6 @@ public interface RentTicketRepository extends JpaRepository<RentTicket, UUID>,
             @Param("to")       LocalDateTime to,
             @Param("statuses") List<TicketStatus> statuses);
 
-    // ── DASHBOARD: Room Current Usage ─────────────────────────────────────────
-
-    /**
-     * Lấy tất cả phiếu đang ở trạng thái BORROWED kèm thông tin phòng và người mượn.
-     * Dùng cho endpoint GET /api/rooms/current-usage
-     */
     @Query("""
             SELECT t FROM RentTicket t
             JOIN FETCH t.fromRoom
@@ -117,4 +125,31 @@ public interface RentTicketRepository extends JpaRepository<RentTicket, UUID>,
             ORDER BY t.borrowDate ASC
             """)
     List<RentTicket> findAllBorrowedWithRoomAndRequester();
+
+    @Query("""
+            SELECT DISTINCT t FROM RentTicket t
+            JOIN FETCH t.fromRoom r
+            LEFT JOIN FETCH r.staffAssignments sa
+            LEFT JOIN FETCH sa.user
+            JOIN FETCH t.requester req
+            LEFT JOIN FETCH req.profile
+            WHERE t.status = 'BORROWED'
+              AND t.expectedReturnDate > :from
+              AND t.expectedReturnDate <= :to
+            """)
+    List<RentTicket> findBorrowedExpiringBetween(
+            @Param("from") LocalDateTime from,
+            @Param("to")   LocalDateTime to);
+
+    @Query("""
+            SELECT DISTINCT t FROM RentTicket t
+            JOIN FETCH t.fromRoom r
+            LEFT JOIN FETCH r.staffAssignments sa
+            LEFT JOIN FETCH sa.user
+            JOIN FETCH t.requester req
+            LEFT JOIN FETCH req.profile
+            WHERE t.status = 'BORROWED'
+              AND t.expectedReturnDate < :now
+            """)
+    List<RentTicket> findBorrowedExpiredBefore(@Param("now") LocalDateTime now);
 }
