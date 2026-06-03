@@ -8,9 +8,46 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
+@NamedEntityGraphs({
+        @NamedEntityGraph(
+                name = "RentTicket.summary",
+                attributeNodes = {
+                        @NamedAttributeNode(value = "requester", subgraph = "requester-profile"),
+                        @NamedAttributeNode("fromRoom")
+                },
+                subgraphs = {
+                        @NamedSubgraph(
+                                name = "requester-profile",
+                                attributeNodes = @NamedAttributeNode("profile")
+                        )
+                }
+        ),
+
+        @NamedEntityGraph(
+                name = "RentTicket.full",
+                attributeNodes = {
+                        @NamedAttributeNode(value = "requester", subgraph = "requester-profile"),
+                        @NamedAttributeNode("fromRoom"),
+                        @NamedAttributeNode(value = "ticketDetails", subgraph = "detail-item")
+                },
+                subgraphs = {
+                        @NamedSubgraph(
+                                name = "requester-profile",
+                                attributeNodes = @NamedAttributeNode("profile")
+                        ),
+                        @NamedSubgraph(
+                                name = "detail-item",
+                                attributeNodes = @NamedAttributeNode("item")
+                        )
+                }
+        )
+})
 @Entity
 @Table(name = "rent_tickets", indexes = {
         @Index(name = "idx_ticket_requester",      columnList = "requester_id"),
@@ -87,5 +124,14 @@ public class RentTicket {
     private LocalDateTime createdAt;
 
     @OneToMany(mappedBy = "ticket", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<RentTicketDetail> ticketDetails;
+    @Builder.Default
+    private Set<RentTicketDetail> ticketDetails = new LinkedHashSet<>();
+
+    /**
+     * Helper trả về ticketDetails dưới dạng List (tiện dùng trong service/mapper).
+     */
+    public List<RentTicketDetail> getTicketDetailsList() {
+        if (ticketDetails == null) return new ArrayList<>();
+        return new ArrayList<>(ticketDetails);
+    }
 }
