@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -17,9 +18,6 @@ public interface RentTicketRepository extends JpaRepository<RentTicket, UUID>,
 
     // ── TEACHER ──────────────────────────────────────────────────────────────
 
-    /**
-     * Lấy danh sách phiếu đang chờ Teacher duyệt của phòng mà Teacher đó quản lý.
-     */
     @Query("""
             SELECT t FROM RentTicket t
             JOIN t.fromRoom r
@@ -30,9 +28,6 @@ public interface RentTicketRepository extends JpaRepository<RentTicket, UUID>,
             """)
     List<RentTicket> findPendingTicketsByTeacher(@Param("teacherId") UUID teacherId);
 
-    /**
-     * Lấy toàn bộ phiếu của phòng mà Teacher quản lý (tất cả trạng thái), có phân trang.
-     */
     @Query("""
             SELECT t FROM RentTicket t
             JOIN t.fromRoom r
@@ -44,9 +39,6 @@ public interface RentTicketRepository extends JpaRepository<RentTicket, UUID>,
             @Param("teacherId") UUID teacherId,
             Pageable pageable);
 
-    /**
-     * Lọc phiếu theo status cho Teacher — chỉ phiếu thuộc phòng mình quản lý.
-     */
     @Query("""
             SELECT t FROM RentTicket t
             JOIN t.fromRoom r
@@ -62,41 +54,25 @@ public interface RentTicketRepository extends JpaRepository<RentTicket, UUID>,
 
     // ── ADMIN ─────────────────────────────────────────────────────────────────
 
-    /**
-     * Lấy danh sách phiếu đang chờ Admin duyệt (sau khi Teacher đã duyệt).
-     */
     List<RentTicket> findAllByStatusOrderByCreatedAtDesc(TicketStatus status);
 
-    // ── REQUESTER (Student / Teacher xem phiếu của chính mình) ───────────────
+    // ── REQUESTER ─────────────────────────────────────────────────────────────
 
-    /**
-     * Lấy danh sách phiếu của người tạo, có phân trang.
-     */
     Page<RentTicket> findAllByRequester_UserIdOrderByCreatedAtDesc(
             UUID requesterId,
             Pageable pageable);
 
-    /**
-     * Lọc phiếu của người tạo theo trạng thái, có phân trang.
-     */
     Page<RentTicket> findAllByRequester_UserIdAndStatusOrderByCreatedAtDesc(
             UUID requesterId,
             TicketStatus status,
             Pageable pageable);
 
-    /**
-     * Lấy phiếu của người tạo theo trạng thái cụ thể (list, không phân trang).
-     */
     List<RentTicket> findAllByRequester_UserIdAndStatus(
             UUID requesterId,
             TicketStatus status);
 
     // ── KIỂM TRA CONFLICT THỜI GIAN ───────────────────────────────────────────
 
-    /**
-     * Kiểm tra phòng đã có phiếu được duyệt/đang mượn trong khoảng thời gian
-     * yêu cầu chưa — tránh trùng lịch mượn phòng.
-     */
     @Query("""
         SELECT COUNT(t) > 0 FROM RentTicket t
         WHERE t.fromRoom.roomId = :roomId
@@ -106,6 +82,39 @@ public interface RentTicketRepository extends JpaRepository<RentTicket, UUID>,
         """)
     boolean existsConflictingBooking(
             @Param("roomId") UUID roomId,
-            @Param("borrowDate") java.time.LocalDateTime borrowDate,
-            @Param("expectedReturnDate") java.time.LocalDateTime expectedReturnDate);
+            @Param("borrowDate") LocalDateTime borrowDate,
+            @Param("expectedReturnDate") LocalDateTime expectedReturnDate);
+
+    // ── DASHBOARD: Weekly Stats ───────────────────────────────────────────────
+
+    /**
+     * Đếm số phiếu có createdAt trong khoảng [from, to) và status thuộc danh sách statuses.
+     * Dùng cho endpoint GET /api/tickets/admin/stats/weekly
+     */
+    @Query("""
+            SELECT COUNT(t) FROM RentTicket t
+            WHERE t.createdAt >= :from
+              AND t.createdAt < :to
+              AND t.status IN :statuses
+            """)
+    long countByCreatedAtBetweenAndStatusIn(
+            @Param("from")     LocalDateTime from,
+            @Param("to")       LocalDateTime to,
+            @Param("statuses") List<TicketStatus> statuses);
+
+    // ── DASHBOARD: Room Current Usage ─────────────────────────────────────────
+
+    /**
+     * Lấy tất cả phiếu đang ở trạng thái BORROWED kèm thông tin phòng và người mượn.
+     * Dùng cho endpoint GET /api/rooms/current-usage
+     */
+    @Query("""
+            SELECT t FROM RentTicket t
+            JOIN FETCH t.fromRoom
+            JOIN FETCH t.requester r
+            LEFT JOIN FETCH r.profile
+            WHERE t.status = 'BORROWED'
+            ORDER BY t.borrowDate ASC
+            """)
+    List<RentTicket> findAllBorrowedWithRoomAndRequester();
 }
