@@ -13,6 +13,7 @@ import com.keywords2dr.lablab.repository.RoomInventoryRepository;
 import com.keywords2dr.lablab.repository.RoomRepository;
 import com.keywords2dr.lablab.service.AuditLogService;
 import com.keywords2dr.lablab.service.RoomInventoryService;
+import com.keywords2dr.lablab.service.StockAlertService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -37,6 +38,7 @@ public class RoomInventoryServiceImpl implements RoomInventoryService {
     private final AuditLogService auditLogService;
     private final ApplicationEventPublisher eventPublisher;
     private final RoomInventoryMapper roomInventoryMapper;
+    private final StockAlertService stockAlertService;
 
     @Override
     @Transactional(readOnly = true)
@@ -48,7 +50,7 @@ public class RoomInventoryServiceImpl implements RoomInventoryService {
                 .collect(Collectors.groupingBy(ri -> ri.getItem().getItemId()));
 
         return byItem.values().stream().map(stocks -> {
-            Item item = stocks.get(0).getItem();
+            Item item = stocks.getFirst().getItem();
             Chemical chemical = (Chemical) item;
 
             BigDecimal total = stocks.stream()
@@ -141,7 +143,6 @@ public class RoomInventoryServiceImpl implements RoomInventoryService {
                 roomInventoryRepository.save(inventory);
             }
 
-            // ✅ Truyền thêm room.getRoomName() vào buildAuditPayload
             Object auditPayload = buildAuditPayload(room.getRoomId(), room.getRoomName(), allocation.getItems(), itemMap);
             auditLogService.logAction("ALLOCATE_INVENTORY", "ROOM_INVENTORY", room.getRoomId(), null, auditPayload);
 
@@ -151,6 +152,10 @@ public class RoomInventoryServiceImpl implements RoomInventoryService {
                             allocation.getItems().size(), room.getRoomName()),
                     "INVENTORY_ALLOCATE");
         }
+
+        request.getAllocations().forEach(allocation ->
+                allocation.getItems().forEach(dto ->
+                        stockAlertService.checkAndNotifyLowStock(dto.getItemId())));
     }
 
     @Override
@@ -220,9 +225,14 @@ public class RoomInventoryServiceImpl implements RoomInventoryService {
                             revocation.getItems().size(), room.getRoomName()),
                     "INVENTORY_REVOKE");
         }
+
+        request.getRevocations().forEach(revocation ->
+                revocation.getItems().forEach(dto ->
+                        stockAlertService.checkAndNotifyLowStock(dto.getItemId())));
     }
 
-    // PRIVATE HELPERS
+    // ── PRIVATE HELPERS ───────────────────────────────────────────────────────
+
     private BigDecimal resolveQuantity(Item item, int packages) {
         if (item instanceof Chemical chemical) {
             if (chemical.getAmountPerPackage() == null) {

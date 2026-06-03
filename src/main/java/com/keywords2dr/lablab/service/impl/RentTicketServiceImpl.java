@@ -14,6 +14,7 @@ import com.keywords2dr.lablab.repository.*;
 import com.keywords2dr.lablab.repository.specification.RentTicketSpecification;
 import com.keywords2dr.lablab.service.AuditLogService;
 import com.keywords2dr.lablab.service.RentTicketService;
+import com.keywords2dr.lablab.service.StockAlertService;
 import com.keywords2dr.lablab.util.UserNameResolver;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -43,6 +44,7 @@ public class RentTicketServiceImpl implements RentTicketService {
     private final RentTicketMapper rentTicketMapper;
     private final AuditLogService auditLogService;
     private final ApplicationEventPublisher eventPublisher;
+    private final StockAlertService stockAlertService;
 
     @Override
     @Transactional
@@ -123,8 +125,7 @@ public class RentTicketServiceImpl implements RentTicketService {
         }
 
         RentTicketResponse newState = rentTicketMapper.toResponse(savedTicket);
-        auditLogService.logAction("CREATE", "RENT_TICKET", savedTicket.getTicketId(),
-                null, newState);
+        auditLogService.logAction("CREATE", "RENT_TICKET", savedTicket.getTicketId(), null, newState);
 
         return newState;
     }
@@ -167,8 +168,6 @@ public class RentTicketServiceImpl implements RentTicketService {
         RentTicketResponse newState = rentTicketMapper.toResponse(ticket);
         auditLogService.logAction("CANCEL", "RENT_TICKET", ticketId, oldState, newState);
     }
-
-    // ── XEM CHI TIẾT ──────────────────────────────────────────────────────────
 
     @Override
     @Transactional(readOnly = true)
@@ -347,7 +346,11 @@ public class RentTicketServiceImpl implements RentTicketService {
         if (ticket.getTicketType() != TicketType.ROOM_ONLY
                 && ticket.getTicketDetails() != null
                 && !ticket.getTicketDetails().isEmpty()) {
+
             processInventoryOnReturn(ticket);
+
+            ticket.getTicketDetails().forEach(detail ->
+                    stockAlertService.checkAndNotifyLowStock(detail.getItem().getItemId()));
         }
 
         notifyUser(ticket.getRequester().getUserId(),
@@ -466,7 +469,6 @@ public class RentTicketServiceImpl implements RentTicketService {
             }
 
         } else {
-            // ── ADMIN DUYỆT ──────────────────────────────────────────────────────
             ticket.setStatus(TicketStatus.APPROVED);
             ticket.setAdminApprovedBy(admin);
             ticket.setAdminApprovedAt(LocalDateTime.now());
@@ -651,7 +653,6 @@ public class RentTicketServiceImpl implements RentTicketService {
                         "Số lượng mượn [" + item.getName() + "] vượt quá tồn kho khả dụng! "
                                 + "Khả dụng: " + available + " " + item.getUnit());
             }
-
 
             inventory.setLockedQuantity(
                     inventory.getLockedQuantity().add(dto.getQuantityBorrowed()));

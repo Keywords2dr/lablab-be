@@ -37,4 +37,6 @@ public interface RoomInventoryRepository extends JpaRepository<RoomInventory, UU
 
     Optional<RoomInventory> findByItem_ItemIdAndRoom_RoomId(UUID itemId, UUID roomId);
 
+    @EntityGraph(attributePaths = {"room"})
+    List<RoomInventory> findAllByItem_ItemId(UUID itemId);
 }

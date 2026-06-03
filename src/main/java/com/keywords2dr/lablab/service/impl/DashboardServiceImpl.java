@@ -62,28 +62,23 @@ public class DashboardServiceImpl implements DashboardService {
     @Override
     @Transactional(readOnly = true)
     public List<DailyTicketStatsDTO> getWeeklyTicketStats() {
-        // 7 ngày: từ 6 ngày trước đến hôm nay
         LocalDate today = LocalDate.now();
-        LocalDate startDate = today.minusDays(6);
+
+        // Lấy ngày đầu tuần (Thứ Hai) của tuần hiện tại
+        LocalDate startOfWeek = today.with(java.time.DayOfWeek.MONDAY);
 
         List<DailyTicketStatsDTO> result = new ArrayList<>();
 
         for (int i = 0; i < 7; i++) {
-            LocalDate date = startDate.plusDays(i);
+            LocalDate date = startOfWeek.plusDays(i); // T2, T3, ..., CN
             LocalDateTime from = date.atStartOfDay();
             LocalDateTime to   = date.plusDays(1).atStartOfDay();
 
-            long approved = rentTicketRepository.countByCreatedAtBetweenAndStatusIn(
-                    from, to, APPROVED_STATUSES);
-            long rejected = rentTicketRepository.countByCreatedAtBetweenAndStatusIn(
-                    from, to, REJECTED_STATUSES);
-            long pending  = rentTicketRepository.countByCreatedAtBetweenAndStatusIn(
-                    from, to, PENDING_STATUSES);
+            long approved = rentTicketRepository.countByCreatedAtBetweenAndStatusIn(from, to, APPROVED_STATUSES);
+            long rejected = rentTicketRepository.countByCreatedAtBetweenAndStatusIn(from, to, REJECTED_STATUSES);
+            long pending  = rentTicketRepository.countByCreatedAtBetweenAndStatusIn(from, to, PENDING_STATUSES);
 
-            // DayOfWeek: MONDAY=1, …, SUNDAY=7 → map sang index 1-7 của mảng DAY_LABELS
-            int dow = date.getDayOfWeek().getValue(); // 1=Mon … 7=Sun
-            // DAY_LABELS index: 0=CN, 1=T2, …, 6=T7
-            // dow 1(Mon)→1, 2(Tue)→2, …, 6(Sat)→6, 7(Sun)→0
+            int dow = date.getDayOfWeek().getValue(); // 1=Mon...7=Sun
             int labelIndex = (dow == 7) ? 0 : dow;
             String label = DAY_LABELS[labelIndex];
 
