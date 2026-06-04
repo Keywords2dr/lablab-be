@@ -618,7 +618,7 @@ public class RentTicketServiceImpl implements RentTicketService {
         return rentTicketRepository.findByIdFull(ticketId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy phiếu mượn!"));
     }
-    
+
     private void validateRejectedReason(String reason) {
         if (!StringUtils.hasText(reason)) {
             throw new BadRequestException("Vui lòng nhập lý do từ chối!");

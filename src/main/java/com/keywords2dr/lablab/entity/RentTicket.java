@@ -127,9 +127,6 @@ public class RentTicket {
     @Builder.Default
     private Set<RentTicketDetail> ticketDetails = new LinkedHashSet<>();
 
-    /**
-     * Helper trả về ticketDetails dưới dạng List (tiện dùng trong service/mapper).
-     */
     public List<RentTicketDetail> getTicketDetailsList() {
         if (ticketDetails == null) return new ArrayList<>();
         return new ArrayList<>(ticketDetails);
