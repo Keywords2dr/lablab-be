@@ -8,13 +8,12 @@ import com.keywords2dr.lablab.exception.ResourceNotFoundException;
 import com.keywords2dr.lablab.mapper.RentTicketMapper;
 import com.keywords2dr.lablab.repository.*;
 import com.keywords2dr.lablab.service.AuditLogService;
+import com.keywords2dr.lablab.service.StockAlertService;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.*;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.domain.*;
-import org.springframework.data.jpa.domain.Specification;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -53,6 +52,7 @@ class RentTicketServiceImplTest {
     @Mock RentTicketMapper           rentTicketMapper;
     @Mock AuditLogService            auditLogService;
     @Mock ApplicationEventPublisher  eventPublisher;
+    @Mock StockAlertService          stockAlertService;
 
     RentTicketServiceImpl service;
 
@@ -95,7 +95,7 @@ class RentTicketServiceImplTest {
                 .borrowDate(LocalDateTime.now().plusHours(1))
                 .expectedReturnDate(LocalDateTime.now().plusHours(3))
                 .createdAt(LocalDateTime.now())
-                .ticketDetails(new ArrayList<>())
+                .ticketDetails(new HashSet<>())
                 .build();
 
         ticketResp  = new RentTicketResponse();
@@ -112,7 +112,8 @@ class RentTicketServiceImplTest {
                 roomInventoryRepository,
                 rentTicketMapper,
                 auditLogService,
-                eventPublisher
+                eventPublisher,
+                stockAlertService
         );
     }
 
@@ -547,7 +548,7 @@ class RentTicketServiceImplTest {
             RentTicketDetail detail = buildDetail(dId);
             ticket.setStatus(TicketStatus.BORROWED);
             ticket.setTicketType(TicketType.CHEMICAL_ONLY);
-            ticket.setTicketDetails(new ArrayList<>(List.of(detail)));
+            ticket.setTicketDetails(new HashSet<>(Set.of(detail)));
             stubFindTicket();
             when(rentTicketDetailRepository.findAllById(any())).thenReturn(List.of(detail));
             when(rentTicketMapper.toResponse(any())).thenReturn(ticketResp);
@@ -585,7 +586,7 @@ class RentTicketServiceImplTest {
         void tc36_chemicalOnly_nullItems() {
             ticket.setStatus(TicketStatus.BORROWED);
             ticket.setTicketType(TicketType.CHEMICAL_ONLY);
-            ticket.setTicketDetails(List.of(buildDetail(UUID.randomUUID())));
+            ticket.setTicketDetails(new HashSet<>(Set.of(buildDetail(UUID.randomUUID()))));
             stubFindTicket();
 
             assertThatThrownBy(() -> service.requestReturn(ticketId, userId, returnReq(null)))
@@ -598,7 +599,7 @@ class RentTicketServiceImplTest {
             UUID d1 = UUID.randomUUID(), d2 = UUID.randomUUID();
             ticket.setStatus(TicketStatus.BORROWED);
             ticket.setTicketType(TicketType.CHEMICAL_ONLY);
-            ticket.setTicketDetails(new ArrayList<>(List.of(buildDetail(d1), buildDetail(d2))));
+            ticket.setTicketDetails(new HashSet<>(Set.of(buildDetail(d1), buildDetail(d2))));
             stubFindTicket();
 
             assertThatThrownBy(() -> service.requestReturn(ticketId, userId,
@@ -614,7 +615,7 @@ class RentTicketServiceImplTest {
             RentTicketDetail detail = buildDetail(dId);
             ticket.setStatus(TicketStatus.BORROWED);
             ticket.setTicketType(TicketType.CHEMICAL_ONLY);
-            ticket.setTicketDetails(new ArrayList<>(List.of(detail)));
+            ticket.setTicketDetails(new HashSet<>(Set.of(detail)));
             stubFindTicket();
             when(rentTicketDetailRepository.findAllById(any())).thenReturn(List.of(detail));
 
@@ -631,7 +632,7 @@ class RentTicketServiceImplTest {
             RentTicketDetail detail = buildDetail(dId);
             ticket.setStatus(TicketStatus.BORROWED);
             ticket.setTicketType(TicketType.CHEMICAL_ONLY);
-            ticket.setTicketDetails(new ArrayList<>(List.of(detail)));
+            ticket.setTicketDetails(new HashSet<>(Set.of(detail)));
             stubFindTicket();
             when(rentTicketDetailRepository.findAllById(any())).thenReturn(List.of(detail));
 
@@ -647,7 +648,7 @@ class RentTicketServiceImplTest {
             RentTicketDetail detail = buildDetail(dId);
             ticket.setStatus(TicketStatus.BORROWED);
             ticket.setTicketType(TicketType.CHEMICAL_ONLY);
-            ticket.setTicketDetails(new ArrayList<>(List.of(detail)));
+            ticket.setTicketDetails(new HashSet<>(Set.of(detail)));
             stubFindTicket();
             when(rentTicketDetailRepository.findAllById(any())).thenReturn(List.of(detail));
 
@@ -683,7 +684,7 @@ class RentTicketServiceImplTest {
         void tc42_chemicalOnly_allOk() {
             ticket.setStatus(TicketStatus.PENDING_RETURN);
             ticket.setTicketType(TicketType.CHEMICAL_ONLY);
-            ticket.setTicketDetails(new ArrayList<>());
+            ticket.setTicketDetails(new HashSet<>());
             stubFindTicket();
             when(rentTicketDetailRepository.existsByTicket_TicketIdAndReturnStatus(
                     ticketId, ReturnStatus.NOT_RETURNED)).thenReturn(false);
@@ -737,7 +738,7 @@ class RentTicketServiceImplTest {
         void tc46_problematicItems_notifyBoth() {
             ticket.setStatus(TicketStatus.PENDING_RETURN);
             ticket.setTicketType(TicketType.CHEMICAL_ONLY);
-            ticket.setTicketDetails(new ArrayList<>());
+            ticket.setTicketDetails(new HashSet<>());
             stubFindTicket();
             when(rentTicketDetailRepository.existsByTicket_TicketIdAndReturnStatus(
                     ticketId, ReturnStatus.NOT_RETURNED)).thenReturn(false);
@@ -770,7 +771,7 @@ class RentTicketServiceImplTest {
         void tc47_approve_success() {
             ticket.setStatus(TicketStatus.PENDING_ADMIN);
             ticket.setTicketType(TicketType.CHEMICAL_ONLY);
-            ticket.setTicketDetails(new ArrayList<>());
+            ticket.setTicketDetails(new HashSet<>());
             stubFindTicket();
             when(userRepository.findById(adminId)).thenReturn(Optional.of(admin));
             when(rentTicketMapper.toResponse(any())).thenReturn(ticketResp);
@@ -838,7 +839,7 @@ class RentTicketServiceImplTest {
             detail.setQuantityBorrowed(new BigDecimal("999"));
             ticket.setStatus(TicketStatus.PENDING_ADMIN);
             ticket.setTicketType(TicketType.CHEMICAL_ONLY);
-            ticket.setTicketDetails(new ArrayList<>(List.of(detail)));
+            ticket.setTicketDetails(new HashSet<>(Set.of(detail)));
             stubFindTicket();
             when(userRepository.findById(adminId)).thenReturn(Optional.of(admin));
             RoomInventory inv = inventory();
@@ -859,7 +860,7 @@ class RentTicketServiceImplTest {
             detail.setQuantityBorrowed(new BigDecimal("5"));
             ticket.setStatus(TicketStatus.PENDING_ADMIN);
             ticket.setTicketType(TicketType.CHEMICAL_ONLY);
-            ticket.setTicketDetails(new ArrayList<>(List.of(detail)));
+            ticket.setTicketDetails(new HashSet<>(Set.of(detail)));
             stubFindTicket();
             when(userRepository.findById(adminId)).thenReturn(Optional.of(admin));
             when(roomInventoryRepository.findAllByRoom_RoomIdAndItem_ItemIdIn(any(), any()))
