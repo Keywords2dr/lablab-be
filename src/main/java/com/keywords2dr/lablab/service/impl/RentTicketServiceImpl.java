@@ -594,6 +594,7 @@ public class RentTicketServiceImpl implements RentTicketService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Page<RentTicketSummaryResponse> getMyTicketsFiltered(
             UUID requesterId,
             List<TicketStatus> excludedStatuses,
