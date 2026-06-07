@@ -1,6 +1,6 @@
-# 🧪 LabLab — Hệ thống Quản lý Phòng Lab & Hóa chất
+# 🧪 LabLab — Hệ thống Quản lý Mượn trả Phòng thí nghiệm
 
-Hệ thống quản lý phòng thí nghiệm và hóa chất dành cho trường đại học, hỗ trợ quy trình mượn/trả phòng, quản lý tồn kho hóa chất, phân công giảng viên, và thông báo tự động.
+Hệ thống Quản lý Mượn trả Phòng thí nghiệm dành cho trường đại học, hỗ trợ quy trình mượn/trả phòng, quản lý tồn kho hóa chất, phân công giảng viên, và thông báo tự động.
 
 ---
 
